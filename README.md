@@ -43,8 +43,6 @@ flowchart LR
 
 - ~500,000+ multi-source financial records covering 6 CEMAC member
   countries (proprietary, BEAC — **not published**)
-- Public repo: use a synthetic sample dataset that mimics the same schema
-  and error patterns *(TODO: generate before making the repo public)*
 
 ## Methodology
 
@@ -59,45 +57,6 @@ flowchart LR
 
 - **-35% data error rate**
 - Secured decision-quality data for 6 member countries
-
-## Demo
-
-*TODO: add a walkthrough (GIF or short video) of the pipeline run and
-before/after data quality report, since this is a pipeline rather than an
-interactive app.*
-
-## Screenshots
-
-*TODO: add before/after data quality metrics, sample anomaly report.*
-
-## Installation
-
-*TODO: verify exact entry point against the actual repo. Draft, to
-confirm:*
-
-```bash
-git clone https://github.com/vloicmonti/sidadr-financial-anomaly-detection.git
-cd sidadr-financial-anomaly-detection
-pip install -r requirements.txt
-python src/run_pipeline.py
-```
-
-## Project Structure
-
-*TODO: replace with the real tree once verified against the code.*
-
-```
-sidadr-financial-anomaly-detection/
-├── data/                  # sample/synthetic data only
-├── src/
-│   ├── ingestion.py
-│   ├── duplicate_detection.py
-│   ├── anomaly_detection.py
-│   └── run_pipeline.py
-├── reports/               # generated data quality reports
-├── requirements.txt
-└── README.md
-```
 
 ## Future Improvements
 
