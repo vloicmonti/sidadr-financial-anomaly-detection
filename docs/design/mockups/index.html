@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIDADR — Maquettes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: var(--font-sans); font-size: var(--text-base); line-height: var(--leading-normal); color: var(--text); background: var(--bg-app); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  .icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .icon-sm { width: 14px; height: 14px; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .95em; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+
+  /* ---------- Shell ---------- */
+  .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 18px 20px 14px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--navy-950); display: grid; place-items: center; }
+  .brand-mark svg { width: 16px; height: 16px; stroke: #fff; }
+  .brand-name { font-weight: 700; letter-spacing: .02em; font-size: 15px; }
+  .brand-sub { font-size: 12px; color: var(--text-tertiary); line-height: 1.2; }
+  .search { margin: 4px 14px 8px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; color: var(--text-tertiary); font-size: 13px; cursor: text; }
+  .kbd { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; background: var(--bg-app); }
+  nav { padding: 4px 12px; overflow-y: auto; flex: 1; }
+  .nav-group { font-size: 12px; font-weight: 500; color: var(--text-tertiary); padding: 18px 10px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-md); color: var(--text-secondary); text-decoration: none; font-weight: 500; transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease); }
+  .nav-item .icon { color: var(--text-tertiary); }
+  .nav-item:hover { background: #f0f2f5; color: var(--text); }
+  .nav-item[aria-current="page"] { background: var(--blue-100); color: var(--primary); }
+  .nav-item[aria-current="page"] .icon { color: var(--primary); }
+  .nav-item[aria-disabled="true"] { cursor: default; }
+  .nav-item[aria-disabled="true"]:hover { background: transparent; color: var(--text-secondary); }
+  .nav-count { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+  .nav-item[aria-current="page"] .nav-count { color: var(--primary); }
+  .sidebar-foot { margin: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; font-size: 12px; color: var(--text-secondary); display: grid; gap: 2px; }
+  .sidebar-foot strong { color: var(--text); font-weight: 600; font-size: 13px; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--success-fg); margin-right: 6px; vertical-align: middle; }
+
+  .main { min-width: 0; }
+  .topbar { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 32px; border-bottom: 1px solid var(--border); background: rgba(247,248,250,.85); backdrop-filter: saturate(1.4) blur(6px); position: sticky; top: 0; z-index: 5; }
+  .crumbs { display: flex; align-items: center; gap: 6px; color: var(--text-tertiary); font-size: 13px; }
+  .crumbs .cur { color: var(--text); font-weight: 500; }
+  .session-chip { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: #fff; font-size: 13px; color: var(--text-secondary); }
+  .session-chip b { color: var(--text); font-weight: 500; }
+  .topbar-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .mock-flag { font-size: 12px; font-weight: 500; color: var(--warning-fg); background: var(--warning-bg); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+
+  .page { padding: 28px 32px 48px; max-width: 1400px; }
+  .page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin: 0; line-height: 1.2; }
+  .page-desc { color: var(--text-secondary); margin: 6px 0 0; }
+  .page-actions { margin-left: auto; display: flex; gap: 8px; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: var(--radius-md); font: inherit; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: background var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease); white-space: nowrap; }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 1px 2px rgba(31,78,140,.25), inset 0 1px 0 rgba(255,255,255,.12); }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:disabled { background: #e3e7ec; color: var(--text-tertiary); box-shadow: none; cursor: not-allowed; }
+  .btn-secondary { background: #fff; color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
+  .btn-secondary:hover { background: #f4f6f8; }
+  .link { color: var(--primary); text-decoration: none; font-weight: 500; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+  .link:hover { text-decoration: underline; }
+
+  .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); min-width: 0; }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 18px 22px 0; }
+  .card-head .hint { color: var(--text-tertiary); font-size: 13px; }
+  .card-head .right { margin-left: auto; }
+  .card-body { padding: 18px 22px 22px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; line-height: 20px; padding: 1px 9px 1px 7px; border-radius: 999px; white-space: nowrap; }
+  .sev-certain { color: var(--sev-certain-fg); background: var(--sev-certain-bg); }
+  .sev-probable { color: var(--sev-probable-fg); background: var(--sev-probable-bg); }
+  .sev-atypical { color: var(--sev-atypical-fg); background: var(--sev-atypical-bg); }
+  .sev-review { color: var(--sev-review-fg); background: var(--sev-review-bg); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gray-400); }
+  .status.ok { color: var(--success-fg); }
+  .status.ok::before { background: var(--success-fg); }
+
+  /* ---------- Vue d'ensemble ---------- */
+  .grid-top { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(0, 1.25fr); gap: 20px; margin-bottom: 20px; }
+  .score { display: grid; grid-template-columns: 148px 1fr; gap: 28px; align-items: center; }
+  .ring { position: relative; width: 148px; height: 148px; }
+  .ring svg { width: 148px; height: 148px; transform: rotate(-90deg); }
+  .ring .track { stroke: #eef1f4; }
+  .ring .val { stroke: var(--primary); stroke-linecap: round; }
+  .ring-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .ring-label b { font-size: var(--text-xl); font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .ring-label span { color: var(--text-tertiary); font-size: 12px; margin-top: 4px; }
+  .dims { display: grid; gap: 14px; }
+  .dim-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .dim-top span:first-child { color: var(--text-secondary); }
+  .dim-top b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dim-top small { color: var(--text-tertiary); font-weight: 400; margin-left: 6px; }
+  .bar { height: 6px; border-radius: 999px; background: #eef1f4; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--blue-600); border-radius: 999px; }
+  .score-note { margin: 18px 0 0; padding: 10px 12px; background: var(--bg-app); border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; }
+  .queue { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 22px 22px; }
+  .queue a { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; text-decoration: none; color: inherit; display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease); }
+  .queue a:hover { border-color: #c9d3df; box-shadow: 0 2px 8px rgba(15,27,45,.06); }
+  .queue .count { font-size: 28px; font-weight: 600; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .queue .desc { font-size: 12px; color: var(--text-tertiary); line-height: 1.45; grid-column: 1 / -1; }
+  .queue .count { grid-row: 1 / span 1; }
+  .queue .go { grid-column: 1 / -1; }
+  .queue .go { font-size: 12px; color: var(--primary); font-weight: 500; display: inline-flex; gap: 4px; align-items: center; }
+
+  .tbl-tools { display: flex; gap: 8px; align-items: center; padding: 14px 22px; }
+  .chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font: inherit; font-size: 13px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--navy-950); color: #fff; border-color: var(--navy-950); }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 12px; font-weight: 500; color: var(--text-tertiary); padding: 0 16px; height: 40px; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; background: #fcfcfd; }
+  thead th:first-child, tbody td:first-child { padding-left: 22px; }
+  thead th:last-child, tbody td:last-child { padding-right: 22px; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 0 16px; height: 56px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  tbody tr { transition: background var(--duration-fast) var(--ease); }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .t-main { font-weight: 500; }
+  .t-sub { color: var(--text-tertiary); font-size: 12px; margin-top: 2px; }
+  .bank { display: inline-flex; align-items: center; gap: 8px; }
+  .avatar { width: 26px; height: 26px; border-radius: 7px; background: #eef1f5; color: var(--text-secondary); display: grid; place-items: center; font-size: 11px; font-weight: 600; flex: none; }
+  .rule { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); background: var(--bg-app); padding: 2px 6px; border-radius: 5px; }
+  .amount { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .amount small { color: var(--text-tertiary); font-weight: 400; margin-left: 3px; font-size: 12px; }
+  .tbl-foot { display: flex; align-items: center; padding: 14px 22px; color: var(--text-tertiary); font-size: 13px; border-top: 1px solid var(--border-subtle); }
+  .tbl-foot .right { margin-left: auto; }
+
+  .row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+  .list { list-style: none; margin: 0; padding: 10px 22px 16px; }
+  .list li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+  .list li:last-child { border-bottom: 0; }
+  .list .when { margin-left: auto; color: var(--text-tertiary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .file-ico { width: 34px; height: 34px; border-radius: 8px; background: var(--blue-50); color: var(--primary); display: grid; place-items: center; flex: none; }
+  .file-meta { flex: 1; min-width: 0; }
+  .mini-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tl { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--bg-app); color: var(--text-secondary); }
+  .tl.ok { background: var(--success-bg); color: var(--success-fg); }
+
+  /* ---------- Noms & identités ---------- */
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; background: #eef1f4; border-radius: 10px; margin-bottom: 20px; }
+  .tab { padding: 6px 14px; border-radius: 7px; color: var(--text-secondary); text-decoration: none; font-weight: 500; font-size: 13px; display: inline-flex; gap: 8px; align-items: center; }
+  .tab[aria-selected="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(15,27,45,.08); }
+  .tab .n { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+  .banner { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--review-bg); color: var(--review-fg); font-size: 13px; margin-bottom: 20px; }
+  .banner strong { font-weight: 600; }
+  .split { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .filter-bar { display: grid; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border-subtle); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; background: #eef1f4; border-radius: 9px; }
+  .seg button { font: inherit; font-size: 12px; font-weight: 500; padding: 5px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(15,27,45,.08); }
+  .threshold { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
+  .threshold input { flex: 1; accent-color: var(--primary); }
+  .threshold b { font-variant-numeric: tabular-nums; color: var(--text); }
+  .candidates { list-style: none; margin: 0; padding: 8px; }
+  .candidates li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px; border-radius: var(--radius-md); cursor: pointer; }
+  .candidates li:hover { background: #f6f8fa; }
+  .candidates li[aria-selected="true"] { background: var(--blue-50); box-shadow: inset 0 0 0 1px var(--info-bd); }
+  .cand-names { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cand-meta { color: var(--text-tertiary); font-size: 12px; }
+  .score-pill { font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+  .detail-head { display: flex; align-items: center; gap: 12px; padding: 20px 22px; }
+  .detail-head .big { margin-left: auto; text-align: right; }
+  .detail-head .big b { font-size: 26px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .detail-head .big span { color: var(--text-tertiary); font-size: 13px; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 22px 18px; }
+  .fact { background: var(--bg-app); border-radius: var(--radius-md); padding: 12px 14px; }
+  .fact .k { font-size: 12px; color: var(--text-tertiary); }
+  .fact .v { font-size: 13px; font-weight: 500; margin-top: 3px; }
+  .fact .v.good { color: var(--success-fg); }
+  .compare { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .compare th, .compare td { padding: 12px 16px; border-top: 1px solid var(--border-subtle); text-align: left; vertical-align: top; }
+  .compare thead th { font-size: 12px; color: var(--text-tertiary); font-weight: 500; background: #fcfcfd; height: auto; }
+  .compare tbody th { width: 160px; color: var(--text-secondary); font-weight: 400; padding-left: 22px; }
+  .compare thead th:first-child { padding-left: 22px; }
+  .compare td:last-child, .compare th:last-child { padding-right: 22px; width: 150px; white-space: nowrap; }
+  .m-same { color: var(--success-fg); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+  .m-diff { color: var(--warning-fg); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+  .m-na { color: var(--text-tertiary); font-size: 12px; }
+  .decision { padding: 20px 22px 22px; border-top: 1px solid var(--border-subtle); display: grid; gap: 16px; }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  legend { font-weight: 600; margin-bottom: 10px; padding: 0; font-size: 14px; }
+  .choice { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; cursor: pointer; font-size: 13px; font-weight: 500; transition: border-color var(--duration-fast) var(--ease); }
+  .choice:hover { border-color: #c9d3df; }
+  .choice:has(input:checked) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--blue-50); }
+  .choice input { margin-top: 2px; accent-color: var(--primary); }
+  .choice small { display: block; color: var(--text-tertiary); font-size: 12px; font-weight: 400; margin-top: 2px; }
+  label.field { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+  label.field .help { font-weight: 400; color: var(--text-tertiary); font-size: 12px; }
+  textarea { font: inherit; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 72px; resize: vertical; color: var(--text); }
+  textarea:focus { outline: none; box-shadow: var(--focus-ring); }
+  .decision-actions { display: flex; gap: 8px; align-items: center; }
+  .decision-actions .note { color: var(--text-tertiary); font-size: 12px; margin-right: auto; display: inline-flex; gap: 6px; align-items: center; }
+
+  .view { display: none; }
+  .view:target, .view.default { display: block; }
+  .view:target ~ .view.default { display: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-rules" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-diff" viewBox="0 0 24 24"><path d="M12 3v14"/><path d="M5 10h14"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-octagon-x" viewBox="0 0 24 24"><path d="m15 9-6 6"/><path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-user-search" viewBox="0 0 24 24"><circle cx="10" cy="7" r="4"/><path d="M10.3 15H7a4 4 0 0 0-4 4v2"/><circle cx="17" cy="17" r="3"/><path d="m21 21-1.9-1.9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-shield"/></svg></div>
+      <div><div class="brand-name">SIDADR</div><div class="brand-sub">Financial Data Quality</div></div>
+    </div>
+    <div class="search" role="button" tabindex="0" aria-label="Rechercher (Ctrl+K)"><svg class="icon"><use href="#i-search"/></svg>Rechercher…<span class="kbd">Ctrl K</span></div>
+    <nav aria-label="Navigation principale">
+      <a class="nav-item" href="#overview" id="nav-overview"><svg class="icon"><use href="#i-dashboard"/></svg>Vue d'ensemble</a>
+      <div class="nav-group">Données</div>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-upload"/></svg>Import</a>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-gauge"/></svg>Qualité des données</a>
+      <div class="nav-group">Détection</div>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-copy"/></svg>Doublons<span class="nav-count">142</span></a>
+      <a class="nav-item" href="#identities" id="nav-identities"><svg class="icon"><use href="#i-users"/></svg>Noms &amp; identités<span class="nav-count">61</span></a>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-activity"/></svg>Anomalies<span class="nav-count">97</span></a>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-rules"/></svg>Règles métier<span class="nav-count">252</span></a>
+      <div class="nav-group">Traitement</div>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-pencil"/></svg>Corrections</a>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-history"/></svg>Historique</a>
+      <div class="nav-group">Sorties</div>
+      <a class="nav-item" aria-disabled="true" title="Maquette à venir"><svg class="icon"><use href="#i-download"/></svg>Rapports &amp; exports</a>
+    </nav>
+    <div class="sidebar-foot">
+      <strong><span class="dot"></span>Moteur local actif</strong>
+      <span>v0.1-dev · règles transactions r3</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>Sessions</span><svg class="icon icon-sm"><use href="#i-chevron"/></svg><span class="cur" id="crumb">Vue d'ensemble</span></div>
+      <div class="topbar-right">
+        <span class="session-chip"><svg class="icon icon-sm"><use href="#i-database"/></svg><b>Contrôle T2</b> · 3 fichiers · 20 412 lignes</span>
+        <span class="mock-flag">Maquette — chiffres fictifs</span>
+      </div>
+    </header>
+
+    <!-- ===================== NOMS & IDENTITÉS ===================== -->
+    <section class="view" id="identities" aria-labelledby="h-identities">
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <h1 id="h-identities">Noms &amp; identités</h1>
+            <p class="page-desc">Correspondances probables entre clients, au sein d'une banque et entre établissements.</p>
+          </div>
+          <div class="page-actions"><button class="btn btn-secondary"><svg class="icon"><use href="#i-download"/></svg>Exporter</button></div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <a class="tab" role="tab" aria-selected="true" href="#identities">Noms similaires <span class="n">48</span></a>
+          <a class="tab" role="tab" aria-selected="false" href="#identities">Multi-banques &amp; agences <span class="n">13</span></a>
+        </div>
+
+        <div class="banner" role="note">
+          <svg class="icon" style="margin-top:2px"><use href="#i-info"/></svg>
+          <div><strong>Une similarité de nom ne prouve pas une identité.</strong> Des personnes distinctes peuvent porter des noms proches. Comparez les champs corroborants avant toute décision ; aucune fusion n'est appliquée automatiquement.</div>
+        </div>
+
+        <div class="split">
+          <div class="card">
+            <div class="filter-bar">
+              <div class="seg" role="group" aria-label="Filtrer par niveau de similarité">
+                <button aria-pressed="true">Élevée · 21</button><button aria-pressed="false">Interm. · 19</button><button aria-pressed="false">Faible · 8</button>
+              </div>
+              <label class="threshold">Seuil minimal <input type="range" min="70" max="100" value="80"><b>80</b></label>
+            </div>
+            <ul class="candidates" role="listbox" aria-label="Correspondances candidates">
+              <li role="option" aria-selected="true"><span class="cand-names">MANGA Jean Pierre ↔ J. P. MANGA</span><span class="score-pill">96</span><span class="cand-meta">Alpha · Beta · inversion + initiales</span><span class="status">Ouvert</span></li>
+              <li role="option" aria-selected="false"><span class="cand-names">NGO BIYONG Esther ↔ NGOBIYONG Esther</span><span class="score-pill">95</span><span class="cand-meta">Gamma · espace manquant</span><span class="status">Ouvert</span></li>
+              <li role="option" aria-selected="false"><span class="cand-names">ATANGANA Paul ↔ ATANGANA Paul</span><span class="score-pill">100</span><span class="cand-meta">Alpha · <span style="color:var(--warning-fg)">naissances différentes</span></span><span class="status">Ouvert</span></li>
+              <li role="option" aria-selected="false"><span class="cand-names">Kamga Hélène ↔ KAMGA Helene</span><span class="score-pill">100</span><span class="cand-meta">Beta · accents, casse</span><span class="status ok">Confirmé</span></li>
+              <li role="option" aria-selected="false"><span class="cand-names">ESSOMBA Marie-Claire ↔ ESSOMBA M. Claire</span><span class="score-pill">93</span><span class="cand-meta">Alpha · Gamma · initiale</span><span class="status">Ouvert</span></li>
+            </ul>
+            <div class="tbl-foot"><span>5 sur 21</span><a class="link right" href="#identities">Suivant <svg class="icon icon-sm"><use href="#i-chevron"/></svg></a></div>
+          </div>
+
+          <div class="card">
+            <div class="detail-head">
+              <div>
+                <h2 style="font-size:17px">MANGA Jean Pierre ↔ J. P. MANGA</h2>
+                <div style="margin-top:8px"><span class="badge sev-review"><svg class="icon icon-sm"><use href="#i-user-search"/></svg>Alerte à examiner</span></div>
+              </div>
+              <div class="big"><b>96</b><span> / 100</span><div class="t-sub">score de similarité</div></div>
+            </div>
+            <div class="facts">
+              <div class="fact"><div class="k">Stratégie retenue</div><div class="v mono">initials_compatible</div></div>
+              <div class="fact"><div class="k">Autres scores</div><div class="v">Tri des mots 71 · Jaro-Winkler 84</div></div>
+              <div class="fact"><div class="k">Corroboration</div><div class="v good">Date de naissance identique</div></div>
+            </div>
+            <table class="compare">
+              <thead><tr><th scope="col">Champ</th><th scope="col">Enregistrement A</th><th scope="col">Enregistrement B</th><th scope="col">Comparaison</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Source</th><td>alpha_T2.csv · ligne 1 284</td><td>beta_T2.xlsx · ligne 77</td><td><span class="m-na">—</span></td></tr>
+                <tr><th scope="row">Banque / agence</th><td><span class="bank"><span class="avatar">BA</span>Alpha · Douala Akwa</span></td><td><span class="bank"><span class="avatar">BB</span>Beta · Yaoundé Centre</span></td><td><span class="m-diff"><svg class="icon icon-sm"><use href="#i-diff"/></svg>Différent</span></td></tr>
+                <tr><th scope="row">Nom normalisé</th><td class="mono">MANGA JEAN PIERRE</td><td class="mono">J P MANGA</td><td><span class="m-diff"><svg class="icon icon-sm"><use href="#i-diff"/></svg>Initiales</span></td></tr>
+                <tr><th scope="row">Date de naissance</th><td class="mono">1984-03-12</td><td class="mono">1984-03-12</td><td><span class="m-same"><svg class="icon icon-sm"><use href="#i-check"/></svg>Identique</span></td></tr>
+                <tr><th scope="row">Téléphone</th><td class="mono">+237 6•• •• •• 41</td><td><span class="m-na">Non renseigné</span></td><td><span class="m-na">Non comparable</span></td></tr>
+                <tr><th scope="row">Identifiant client</th><td class="mono">C-BALP-00412</td><td class="mono">C-BBET-01877</td><td><span class="m-na">Référentiels distincts</span></td></tr>
+              </tbody>
+            </table>
+            <form class="decision" onsubmit="return false">
+              <fieldset>
+                <legend>Décision</legend>
+                <label class="choice"><input type="radio" name="d" checked><span>Même client<small>Les enregistrements sont reliés ; rien n'est fusionné.</small></span></label>
+                <label class="choice"><input type="radio" name="d"><span>Clients distincts<small>La correspondance est rejetée.</small></span></label>
+                <label class="choice"><input type="radio" name="d"><span>À revoir plus tard<small>Reste ouverte, avec un commentaire.</small></span></label>
+              </fieldset>
+              <label class="field">Motif de la décision
+                <textarea id="reason" aria-describedby="reason-help"></textarea>
+                <span class="help" id="reason-help">Obligatoire. Enregistré dans le journal d'audit avec la date, la session et les deux identifiants.</span>
+              </label>
+              <div class="decision-actions">
+                <span class="note"><svg class="icon icon-sm"><use href="#i-history"/></svg>Décision réversible depuis l'Historique</span>
+                <button class="btn btn-secondary" type="button">Passer</button>
+                <button class="btn btn-primary" id="confirm" type="submit" disabled>Enregistrer la décision</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== VUE D'ENSEMBLE ===================== -->
+    <section class="view default" id="overview" aria-labelledby="h-overview">
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <h1 id="h-overview">Vue d'ensemble</h1>
+            <p class="page-desc">Contrôle T2 — banques Alpha, Beta, Gamma · importé le 19/11/2026 à 10:42</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary"><svg class="icon"><use href="#i-upload"/></svg>Importer</button>
+            <button class="btn btn-primary"><svg class="icon"><use href="#i-download"/></svg>Rapport qualité</button>
+          </div>
+        </div>
+
+        <div class="grid-top">
+          <div class="card">
+            <div class="card-head"><h2>Score qualité</h2><a class="link right" href="#overview">Détail <svg class="icon icon-sm"><use href="#i-chevron"/></svg></a></div>
+            <div class="card-body">
+              <div class="score">
+                <div class="ring" role="img" aria-label="Score qualité 87,4 sur 100">
+                  <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42" fill="none" stroke-width="8"/><circle class="val" cx="50" cy="50" r="42" fill="none" stroke-width="8" stroke-dasharray="230.6 263.9"/></svg>
+                  <div class="ring-label"><b>87,4</b><span>sur 100</span></div>
+                </div>
+                <div class="dims">
+                  <div><div class="dim-top"><span>Complétude</span><b>96,1<small>× 0,30</small></b></div><div class="bar"><span style="width:96.1%"></span></div></div>
+                  <div><div class="dim-top"><span>Unicité</span><b>93,0<small>× 0,20</small></b></div><div class="bar"><span style="width:93%"></span></div></div>
+                  <div><div class="dim-top"><span>Validité</span><b>81,2<small>× 0,30</small></b></div><div class="bar"><span style="width:81.2%"></span></div></div>
+                  <div><div class="dim-top"><span>Cohérence</span><b>81,8<small>× 0,20</small></b></div><div class="bar"><span style="width:81.8%"></span></div></div>
+                </div>
+              </div>
+              <div class="score-note"><svg class="icon icon-sm" style="margin-top:1px"><use href="#i-info"/></svg>Indicateur interne à pondération configurable. Les valeurs atypiques et alertes de similarité ne le pénalisent pas.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>À traiter</h2><span class="hint">410 constats ouverts</span></div>
+            <div class="queue">
+              <a href="#overview"><span class="badge sev-certain"><svg class="icon icon-sm"><use href="#i-octagon-x"/></svg>Erreur certaine</span><span class="count">38</span><span class="desc">Formats invalides, dates impossibles, devises hors référentiel</span><span class="go">Traiter <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></a>
+              <a href="#overview"><span class="badge sev-probable"><svg class="icon icon-sm"><use href="#i-alert"/></svg>Incohérence</span><span class="count">214</span><span class="desc">Règles métier non respectées</span><span class="go">Traiter <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></a>
+              <a href="#overview"><span class="badge sev-atypical"><svg class="icon icon-sm"><use href="#i-activity"/></svg>Atypique</span><span class="count">97</span><span class="desc">Écarts statistiques à vérifier — pas des erreurs</span><span class="go">Examiner <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></a>
+              <a href="#identities"><span class="badge sev-review"><svg class="icon icon-sm"><use href="#i-user-search"/></svg>À examiner</span><span class="count">61</span><span class="desc">Correspondances de noms à valider</span><span class="go">Valider <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Constats prioritaires</h2><span class="hint">Triés par sévérité puis montant</span><a class="link right" href="#overview">Tous les constats <svg class="icon icon-sm"><use href="#i-chevron"/></svg></a></div>
+          <div class="tbl-tools">
+            <button class="chip" aria-pressed="true">Tous</button><button class="chip" aria-pressed="false">Erreurs certaines</button><button class="chip" aria-pressed="false">Incohérences</button><button class="chip" aria-pressed="false">Atypiques</button><button class="chip" aria-pressed="false">À examiner</button>
+          </div>
+          <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Constat</th><th>Sévérité</th><th>Banque</th><th class="num">Valeur observée</th><th>Règle / méthode</th><th>Statut</th></tr></thead>
+            <tbody>
+              <tr><td><div class="t-main">Date d'opération impossible</div><div class="t-sub">transaction_date · beta:4 412</div></td><td><span class="badge sev-certain"><svg class="icon icon-sm"><use href="#i-octagon-x"/></svg>Erreur certaine</span></td><td><span class="bank"><span class="avatar">BB</span>Beta</span></td><td class="num mono">2025-02-30</td><td><span class="rule">R-DATE-VALID</span></td><td><span class="status">Ouvert</span></td></tr>
+              <tr><td><div class="t-main">Devise hors référentiel</div><div class="t-sub">currency · gamma:918</div></td><td><span class="badge sev-certain"><svg class="icon icon-sm"><use href="#i-octagon-x"/></svg>Erreur certaine</span></td><td><span class="bank"><span class="avatar">BG</span>Gamma</span></td><td class="num mono">XFA</td><td><span class="rule">R-CURRENCY-ISO</span></td><td><span class="status">Ouvert</span></td></tr>
+              <tr><td><div class="t-main">Dépôt à montant négatif</div><div class="t-sub">amount · DEPOSIT · alpha:2 077</div></td><td><span class="badge sev-probable"><svg class="icon icon-sm"><use href="#i-alert"/></svg>Incohérence probable</span></td><td><span class="bank"><span class="avatar">BA</span>Alpha</span></td><td class="num"><span class="amount">−1 250 000<small>XAF</small></span></td><td><span class="rule">R-AMOUNT-NEG-DEPOSIT</span></td><td><span class="status">Ouvert</span></td></tr>
+              <tr><td><div class="t-main">Code agence inconnu</div><div class="t-sub">branch_code · alpha:6 301</div></td><td><span class="badge sev-probable"><svg class="icon icon-sm"><use href="#i-alert"/></svg>Incohérence probable</span></td><td><span class="bank"><span class="avatar">BA</span>Alpha</span></td><td class="num mono">BALP-099</td><td><span class="rule">R-BRANCH-REF</span></td><td><span class="status ok">Corrigé</span></td></tr>
+              <tr><td><div class="t-main">Montant très élevé pour le groupe</div><div class="t-sub">TRANSFER_OUT · XAF · gamma:1 530</div></td><td><span class="badge sev-atypical"><svg class="icon icon-sm"><use href="#i-activity"/></svg>Valeur atypique</span></td><td><span class="bank"><span class="avatar">BG</span>Gamma</span></td><td class="num"><span class="amount">485 000 000<small>XAF</small></span></td><td><span class="rule">robust_z 9,8 &gt; 3,5</span></td><td><span class="status">Ouvert</span></td></tr>
+              <tr><td><div class="t-main">Client possiblement multi-banques</div><div class="t-sub">customer_name · alpha:1 284 · beta:77</div></td><td><span class="badge sev-review"><svg class="icon icon-sm"><use href="#i-user-search"/></svg>Alerte à examiner</span></td><td><span class="bank"><span class="avatar">BA</span>Alpha, Beta</span></td><td class="num"><span class="amount">96<small>/ 100</small></span></td><td><span class="rule">initials_compatible</span></td><td><span class="status">Ouvert</span></td></tr>
+            </tbody>
+          </table>
+          </div>
+          <div class="tbl-foot"><span>6 sur 410 constats ouverts</span></div>
+        </div>
+
+        <div class="row3">
+          <div class="card">
+            <div class="card-head"><h2>Fichiers de la session</h2></div>
+            <ul class="list">
+              <li><span class="file-ico"><svg class="icon"><use href="#i-file"/></svg></span><div class="file-meta"><div class="t-main">alpha_T2.csv</div><div class="t-sub">8 120 lignes · UTF-8 · « ; »</div></div><span class="mini-score">89,1</span></li>
+              <li><span class="file-ico"><svg class="icon"><use href="#i-file"/></svg></span><div class="file-meta"><div class="t-main">beta_T2.xlsx</div><div class="t-sub">6 954 lignes · feuille « Opérations »</div></div><span class="mini-score">86,7</span></li>
+              <li><span class="file-ico"><svg class="icon"><use href="#i-file"/></svg></span><div class="file-meta"><div class="t-main">gamma_T2.csv</div><div class="t-sub">5 338 lignes · cp1252 · « , »</div></div><span class="mini-score">85,9</span></li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Dernières opérations</h2><a class="link right" href="#overview">Historique <svg class="icon icon-sm"><use href="#i-chevron"/></svg></a></div>
+            <ul class="list">
+              <li><span class="tl ok"><svg class="icon icon-sm"><use href="#i-pencil"/></svg></span><span>Code agence corrigé <span class="mono">BALP-099 → BALP-009</span></span><span class="when">10:58</span></li>
+              <li><span class="tl ok"><svg class="icon icon-sm"><use href="#i-check"/></svg></span><span>Correspondance confirmée · KAMGA Hélène</span><span class="when">10:55</span></li>
+              <li><span class="tl"><svg class="icon icon-sm"><use href="#i-rules"/></svg></span><span>Correspondance des colonnes validée · beta_T2.xlsx</span><span class="when">10:44</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  const reason = document.getElementById('reason');
+  const confirmBtn = document.getElementById('confirm');
+  reason.addEventListener('input', () => { confirmBtn.disabled = reason.value.trim().length < 5; });
+  function syncNav() {
+    const id = location.hash === '#identities' ? 'identities' : 'overview';
+    document.querySelectorAll('.nav-item').forEach(a => a.removeAttribute('aria-current'));
+    document.getElementById('nav-' + id).setAttribute('aria-current', 'page');
+    document.getElementById('crumb').textContent = id === 'identities' ? 'Noms & identités' : "Vue d'ensemble";
+  }
+  window.addEventListener('hashchange', () => { syncNav(); window.scrollTo(0, 0); });
+  syncNav(); window.addEventListener('load', () => window.scrollTo(0, 0));
+</script>
+</body>
+</html>

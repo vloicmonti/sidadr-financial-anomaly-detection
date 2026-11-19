@@ -1,0 +1,94 @@
+/* SIDADR design tokens — direction « moderne épurée » (validée en Phase 1). Source de vérité unique.
+   En Phase 11, ces variables alimentent tailwind.config (theme.extend) et les composants shadcn/ui. */
+
+:root {
+  /* ---- Couleurs de marque ---- */
+  --navy-950: #0b1b33;   /* logo, filtre actif, accents forts */
+  --blue-700: #1f4e8c;   /* primaire : actions principales, liens */
+  --blue-800: #183f73;   /* primaire survol */
+  --blue-600: #2d63ab;
+  --blue-100: #e6eef8;   /* fonds d'information */
+  --blue-50:  #f2f6fb;
+
+  /* ---- Neutres ---- */
+  --gray-0:   #ffffff;   /* surfaces (cartes, tableaux) */
+  --gray-10:  #fbfbfc;   /* barre latérale */
+  --gray-25:  #f7f8fa;   /* fond d'application */
+  --gray-50:  #f0f2f5;   /* en-têtes de tableau, zones calmes */
+  --gray-100: #eef1f4;   /* séparateurs internes, pistes de jauge, segments */
+  --gray-200: #e6e9ee;   /* bordures */
+  --gray-300: #c9d3df;   /* bordures au survol */
+  --gray-400: #98a2b0;
+  --gray-500: #5f6b7a;   /* texte tertiaire (≥ 4,5:1 sur toutes les surfaces) */
+  --gray-600: #4a5768;   /* texte secondaire (7.6:1) */
+  --gray-900: #0f1b2d;   /* texte principal */
+
+  /* ---- Sémantique : statuts ---- */
+  --success-fg: #1e6b45;  --success-bg: #e6f3ec;  --success-bd: #b9dcc8;
+  --warning-fg: #8a4f00;  --warning-bg: #fff2df;  --warning-bd: #f3cf98;
+  --danger-fg:  #a8201a;  --danger-bg:  #fdebe9;  --danger-bd:  #f1bab4;
+  --info-fg:    #1f5fa8;  --info-bg:    #e6eef8;  --info-bd:    #bcd1ec;
+  --review-fg:  #4c3fa0;  --review-bg:  #efedfa;  --review-bd:  #cfc9ef;
+
+  /* ---- Sévérités SIDADR (toujours accompagnées d'une icône + libellé, jamais la couleur seule) ---- */
+  --sev-certain-fg: var(--danger-fg);   --sev-certain-bg: var(--danger-bg);    /* Erreur certaine */
+  --sev-probable-fg: var(--warning-fg); --sev-probable-bg: var(--warning-bg);  /* Incohérence probable */
+  --sev-atypical-fg: var(--info-fg);    --sev-atypical-bg: var(--info-bg);     /* Valeur atypique */
+  --sev-review-fg: var(--review-fg);    --sev-review-bg: var(--review-bg);     /* Alerte à examiner */
+
+  /* ---- Rôles ---- */
+  --bg-app: var(--gray-25);
+  --bg-surface: var(--gray-0);
+  --bg-subtle: var(--gray-50);
+  --bg-sidebar: var(--gray-10);
+  --border: var(--gray-200);
+  --border-subtle: var(--gray-100);
+  --text: var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-tertiary: var(--gray-500);
+  --primary: var(--blue-700);
+  --primary-hover: var(--blue-800);
+  --on-primary: #ffffff;
+  --focus-ring: 0 0 0 2px var(--gray-0), 0 0 0 4px var(--blue-600);
+
+  /* ---- Typographie ---- */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-xs: 12px;   /* libellés de badge, métadonnées */
+  --text-sm: 13px;   /* cellules de tableau */
+  --text-base: 14px; /* texte d'interface */
+  --text-md: 16px;   /* titres de section */
+  --text-lg: 24px;   /* titres de page (letter-spacing -0.02em) */
+  --text-xl: 30px;   /* valeurs clés (score) */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ---- Espacements (base 4 px, densité tableau de bord) ---- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+
+  /* ---- Rayons, ombres, bordures ---- */
+  --radius-sm: 6px;   /* champs, étiquettes de règle */
+  --radius-md: 8px;   /* boutons, éléments de liste */
+  --radius-lg: 12px;  /* cartes, panneaux, modales */
+  --radius-full: 999px; /* badges, pastilles, filtres */
+  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.04), 0 1px 1px rgba(15, 27, 45, 0.02);
+  --shadow-md: 0 4px 12px rgba(15, 27, 45, 0.08);   /* menus, modales uniquement */
+
+  /* ---- Mouvement ---- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+
+  /* ---- Mise en page ---- */
+  --sidebar-width: 248px;
+  --topbar-height: 56px;
+  --content-max: 1400px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0ms; --duration-base: 0ms; }
+}
