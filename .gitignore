@@ -32,3 +32,6 @@ data/synthetic/_scratch/
 .DS_Store
 Thumbs.db
 ~$*
+
+# Exports et rapports générés
+exports/

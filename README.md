@@ -1,70 +1,154 @@
-# SIDADR — Financial Anomaly & Duplicate Detection
+# SIDADR — Financial Data Quality & Anomaly Intelligence
 
-> Automated ETL pipeline that caught data errors across 500,000+ regional financial records from 6 countries — before they reached decision-makers.
+[![CI](https://github.com/vloicmonti/sidadr-financial-anomaly-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/vloicmonti/sidadr-financial-anomaly-detection/actions/workflows/ci.yml)
 
-⚠️ **Data confidentiality**: built on proprietary, multi-source financial
-data from BEAC (6 CEMAC member countries). Real data is **not included**
-in this repository — the public version should run on a synthetic sample
-dataset. See [Data](#data).
+> **Système Intelligent de Détection des Anomalies et Duplications** dans des données financières multi-sources : import, profilage, doublons, noms similaires, clients multi-banques, valeurs atypiques, règles métier, corrections tracées et rapport qualité.
 
-## Business Problem
+**Statut : v0.1 — moteur complet en ligne de commande.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. L'interface web (React) est la prochaine étape.
 
-A central bank aggregating financial data from 6 member countries through
-multiple source systems faces a recurring risk: duplicate entries and
-silent data errors that undermine the reliability of any downstream
-reporting or policy decision built on that data.
+---
 
-## Solution
+## Le problème
 
-SIDADR (Système Intelligent de Détection des Anomalies et Duplications) is
-an automated ETL pipeline that ingests multi-source regional financial
-records, flags anomalies and duplicate entries, and produces a cleaned,
-trustworthy dataset for decision-making.
+Une institution qui consolide des opérations venant de plusieurs banques reçoit des fichiers aux formats différents (séparateurs, encodages, dates, noms de colonnes), avec des doublons, des clients enregistrés sous plusieurs orthographes, des valeurs manquantes ou incohérentes. Avant toute analyse, il faut **savoir ce qui ne va pas, le corriger de façon traçable, et pouvoir le prouver**.
+
+SIDADR **signale, l'humain décide** : aucun détecteur ne supprime, ne fusionne ni ne corrige quoi que ce soit automatiquement.
+
+## Ce que fait le moteur
+
+| Module | Rôle | Commande |
+|---|---|---|
+| Import | CSV et XLSX hétérogènes, détection d'encodage et de séparateur, correspondance des colonnes **confirmée par l'utilisateur**, contrôles de sécurité | `sidadr inspect` |
+| Profilage | complétude, validité, statistiques, score qualité explicable sur 4 dimensions | `sidadr profile` |
+| Doublons exacts | lignes identiques, identifiants en double, doublons inter-fichiers, combinaisons de champs | `sidadr duplicates` |
+| Noms similaires | 5 stratégies (RapidFuzz), corroboration par date de naissance et téléphone, 3 niveaux de similarité | `sidadr names` |
+| Multi-banques | clients présents dans plusieurs banques ou agences | `sidadr entities` |
+| Valeurs atypiques | z-score robuste et IQR sur le logarithme des montants, par type d'opération et devise | `sidadr anomalies` |
+| Règles métier | règles déclaratives en YAML, typées, validées au chargement | `sidadr rules` |
+| Corrections | original immuable, corrections et décisions réversibles, journal d'audit chaîné | `sidadr correct`, `decide`, `undo`, `history` |
+| Exports | CSV / XLSX avec fiche de traçabilité, rapport qualité HTML autonome | `sidadr export`, `sidadr report` |
+
+Chaque constat porte une **sévérité** explicite : *erreur certaine*, *incohérence probable*, *valeur atypique* ou *alerte à examiner*. Une similarité de nom n'est jamais présentée comme une identité, une valeur atypique jamais comme une erreur ni comme une fraude.
+
+## Résultats mesurés
+
+Le générateur de données injecte des défauts **connus** et écrit leur liste (`data/synthetic/_truth/`). Chaque détecteur est mesuré contre cette vérité terrain ; les tests échouent si les performances se dégradent.
+
+| Détecteur | Mesure sur le jeu de référence (20 200 lignes, graine 42) |
+|---|---|
+| Valeurs manquantes, dates impossibles, montants non numériques | 100 % retrouvés, 0 faux positif |
+| Doublons exacts, d'identifiant, inter-fichiers | 120/120, 60/60, 20/20 groupes exacts |
+| Règles métier (7 règles) | 430/430 violations retrouvées, 0 faux positif |
+| Noms similaires | précision 100 % en similarité élevée ; rappel 100 % dès l'intermédiaire ; 0/40 homonymes classés « élevée » |
+| Clients multi-banques | 100 % retrouvés (par défaut) ; 100 % de groupes purs en mode strict |
+| Montants atypiques | 96 à 99 % retrouvés sur trois graines |
+
+Ces chiffres valent pour des **données synthétiques** générées par le projet lui-même : ils démontrent que la méthode fonctionne et qu'elle est mesurable, **pas** qu'elle obtiendrait les mêmes résultats sur des données réelles. Les limites sont détaillées dans [la spécification](docs/specs/ENGINE_SPEC.md) et [la note sur les noms](docs/specs/NAME_MATCHING.md).
+
+## Démarrage rapide (Windows PowerShell)
+
+Prérequis : Python 3.12.
+
+```powershell
+git clone https://github.com/vloicmonti/sidadr-financial-anomaly-detection.git
+cd sidadr-financial-anomaly-detection
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pytest
+```
+
+Sous macOS ou Linux, remplacer `.venv\Scripts\` par `.venv/bin/`.
+
+### Analyse ponctuelle des trois fichiers de démonstration
+
+```powershell
+.venv\Scripts\sidadr inspect data\synthetic\alpha_T2.csv data\synthetic\beta_T2.xlsx data\synthetic\gamma_T2.csv
+.venv\Scripts\sidadr profile data\synthetic\alpha_T2.csv data\synthetic\beta_T2.xlsx data\synthetic\gamma_T2.csv --accept-proposed
+```
+
+`inspect` affiche la correspondance proposée entre les colonnes de chaque fichier et le schéma ; rien n'est importé tant qu'elle n'est pas confirmée (`--accept-proposed`, ou `--mapping corrections.yaml`).
+
+### Parcours de revue complet
+
+```powershell
+.venv\Scripts\sidadr session-create data\synthetic\alpha_T2.csv data\synthetic\beta_T2.xlsx data\synthetic\gamma_T2.csv --accept-proposed --name "Contrôle T2"
+.venv\Scripts\sidadr analyze <SESSION>
+.venv\Scripts\sidadr findings <SESSION> --severity certain_error
+.venv\Scripts\sidadr correct <SESSION> alpha_t2:1035 branch_code BALP-018 --reason "Code agence retrouvé dans le système source"
+.venv\Scripts\sidadr decide <SESSION> NAME-00002 rejected --reason "Homonymes : dates de naissance différentes"
+.venv\Scripts\sidadr analyze <SESSION>
+.venv\Scripts\sidadr history <SESSION> --verify
+.venv\Scripts\sidadr export <SESSION> --format xlsx
+.venv\Scripts\sidadr report <SESSION>
+```
+
+Les sessions sont enregistrées dans `workspace/` (ignoré par Git), les exports dans `exports/`.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A[Multi-source financial data<br/>6 CEMAC countries] --> B[ETL Ingestion]
-    B --> C[Duplicate Detection]
-    B --> D[Anomaly Detection]
-    C --> E[Cleaned dataset]
-    D --> E
-    E --> F[Decision-ready financial data]
+    F[CSV / XLSX] --> I[Import<br/>correspondance confirmée]
+    I --> S[(Instantané original<br/>Parquet, lecture seule)]
+    S --> W[Vue de travail<br/>original + corrections]
+    W --> D[Détecteurs<br/>profil · doublons · noms<br/>multi-banques · atypiques · règles]
+    D --> C[Constats<br/>sévérité + explication]
+    C --> H[Décision humaine<br/>motif obligatoire]
+    H --> J[(Journal d'audit<br/>SQLite, ajout seul, chaîné)]
+    J --> W
+    W --> E[Exports + rapport HTML<br/>fiche de traçabilité]
 ```
 
-## Tech Stack
+```
+src/sidadr/
+  ingestion/  profiling/  deduplication/  name_matching/  cross_entity/
+  anomaly_detection/  business_rules/  correction/  storage/  export/  reporting/
+  findings/  evaluation/  synthetic/  analysis.py  cli.py  cli_session.py
+config/        schéma, seuils, poids du score et règles (YAML)
+data/synthetic jeu de démonstration et vérité terrain
+docs/          architecture, spécifications, dictionnaire de données, design system
+tests/         257 tests unitaires et d'intégration
+```
 
-- **Language**: Python (Pandas, NumPy)
-- **Database**: MySQL
-- **Query**: SQL
+**Choix principaux**
+- **Moteur indépendant de l'interface** : toute la logique est dans un paquet Python testé ; une interface ne fera que l'appeler.
+- **Données originales immuables** : instantané en lecture seule, protégé par empreinte SHA-256 ; les corrections sont une couche réversible.
+- **Configuration plutôt que code** : seuils, règles et poids du score sont en YAML, validés au chargement.
+- **Méthodes explicables d'abord** : Isolation Forest et LOF ont été étudiés puis écartés, faute de pouvoir les valider sur ces données ([raisons](docs/specs/ENGINE_SPEC.md)).
+- **Pas de technologie sans besoin** : pas de PostgreSQL, Docker, Airflow ni Spark pour un outil local mono-utilisateur.
 
-## Data
+Qualité : `ruff` (lint et format), `mypy --strict`, `pytest`, intégration continue GitHub Actions.
 
-- ~500,000+ multi-source financial records covering 6 CEMAC member
-  countries (proprietary, BEAC — **not published**)
+## Données et confidentialité
 
-## Methodology
+Toutes les données du dépôt sont **synthétiques** : noms tirés au hasard, banques et comptes inventés, téléphones sur l'indicatif `+999`, qui n'est attribué à aucun pays. Le jeu se régénère à l'identique :
 
-1. Ingest financial records from multiple regional source systems
-2. Standardize schemas across sources
-3. Detect duplicate records (entity resolution / matching rules)
-4. Detect anomalies (rule-based and/or statistical outlier detection)
-5. Produce a cleaned, validated dataset with an audit trail of
-   corrections
+```powershell
+.venv\Scripts\sidadr generate --rows 20000 --seed 42 --out data\synthetic
+```
 
-## Results
+Voir le [dictionnaire de données](docs/data_dictionary/DATA_DICTIONARY.md).
 
-- **-35% data error rate**
-- Secured decision-quality data for 6 member countries
+## Contexte
 
-## Future Improvements
+Ce projet est inspiré de travaux de contrôle qualité de données financières menés lors d'un stage à la Banque des États de l'Afrique Centrale (service CNEF, Yaoundé, juin–septembre 2025). **Aucune donnée, aucun code et aucun résultat de ce stage ne figure dans ce dépôt** : SIDADR est une reconstruction indépendante, et tous les chiffres ci-dessus proviennent exclusivement du jeu synthétique.
 
-- Add automated tests covering duplicate/anomaly detection edge cases
-- Add a lightweight dashboard for data quality monitoring over time
-- Parameterize detection rules per data source
+## Limites
 
-## Author
+- Prototype local mono-utilisateur, sans authentification ; l'auteur des actions est déclaré.
+- Seuils calibrés sur des données synthétiques.
+- Le journal d'audit détecte une falsification mais ne l'empêche pas (pas de signature externe).
+- Pas encore d'interface graphique : la v0.1 s'utilise en ligne de commande.
 
-**Vincent Loïc Monti**
+## Documentation
+
+- [Architecture](docs/architecture/ARCHITECTURE.md)
+- [Spécifications et résultats par module](docs/specs/ENGINE_SPEC.md)
+- [Rapprochement des noms : méthode et calibration](docs/specs/NAME_MATCHING.md)
+- [Dictionnaire de données](docs/data_dictionary/DATA_DICTIONARY.md)
+- [Design system de l'interface à venir](docs/design/DESIGN_SYSTEM.md)
+
+## Auteur
+
+**Vincent Loïc Monti** — Master 2 IA & Big Data, ESTIAM Paris
 [LinkedIn](https://www.linkedin.com/in/vincent-lo%C3%AFc-monti-981641388/) · [loicmonti318@gmail.com](mailto:loicmonti318@gmail.com)

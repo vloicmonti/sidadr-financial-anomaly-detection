@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -113,4 +114,57 @@ def load_findings(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     data: list[dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))
+    return data
+
+
+def summarize(
+    result: AnalysisResult, records: list[dict[str, Any]], journal_entries: int
+) -> dict[str, Any]:
+    """Résumé persistant d'une analyse, réutilisé par les exports et le rapport."""
+    from datetime import UTC, datetime
+
+    from sidadr import __version__
+
+    def by(key: str) -> dict[str, int]:
+        return dict(sorted(Counter(str(r[key]) for r in records).items()))
+
+    return {
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "sidadr_version": __version__,
+        "rows_analyzed": result.profile.n_rows,
+        "journal_entries_at_analysis": journal_entries,
+        "score": dataclasses.asdict(result.score),
+        "findings": {
+            "total": len(records),
+            "by_severity": by("severity"),
+            "by_kind": by("kind"),
+            "by_status": by("status"),
+        },
+        "rules": [
+            {
+                "rule_id": o.rule.rule_id,
+                "description": o.rule.description,
+                "severity": o.rule.severity.value,
+                "dimension": o.rule.dimension,
+                "checked": o.applicable,
+                "violations": o.violations,
+                "not_evaluable": o.not_evaluable,
+            }
+            for o in result.rules.outcomes
+        ],
+        "rule_parameters": {k: str(v) for k, v in result.rules.ruleset.parameters.items()},
+        "anomaly_groups_skipped": len(result.anomalies.skipped_groups),
+    }
+
+
+def save_summary(path: Path, summary: dict[str, Any]) -> None:
+    path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+    )
+
+
+def load_summary(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return data

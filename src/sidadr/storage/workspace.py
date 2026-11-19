@@ -114,6 +114,10 @@ class SessionStore:
     def findings_path(self) -> Path:
         return self.directory / "findings.json"
 
+    @property
+    def summary_path(self) -> Path:
+        return self.directory / "analysis_summary.json"
+
     def original_frame(self) -> pd.DataFrame:
         """Relit l'instantané après avoir vérifié qu'il n'a pas été modifié."""
         if _sha256(self.original_path) != self.metadata["original_sha256"]:

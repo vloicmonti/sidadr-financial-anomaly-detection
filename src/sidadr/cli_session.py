@@ -19,9 +19,18 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sidadr.analysis import analyze, findings_to_records, load_findings, save_findings
+from sidadr.analysis import (
+    analyze,
+    findings_to_records,
+    load_findings,
+    save_findings,
+    save_summary,
+    summarize,
+)
 from sidadr.correction import CorrectionService, Decision
+from sidadr.export import export_session
 from sidadr.findings import Severity
+from sidadr.reporting.html_report import write_report
 from sidadr.storage import Workspace, default_workspace
 
 EXIT_OK, EXIT_ERROR, EXIT_NEEDS_CONFIRMATION = 0, 1, 2
@@ -69,6 +78,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     result = analyze(frame, service.schema, rules_path=args.rules, rule_overrides=overrides)
     records = findings_to_records(result.findings(), service.decisions())
     save_findings(service.store.findings_path, records)
+    save_summary(service.store.summary_path, summarize(result, records, len(service.history())))
 
     excluded = len(service.excluded_records())
     corrections = len(service.active_corrections())
@@ -209,6 +219,40 @@ def cmd_history(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    service = _service(args)
+    out = args.out or Path("exports") / service.store.session_id
+    result = export_session(service, out, args.format)
+    print(f"Export {args.format.upper()} de {service.store.session_id} :")
+    for path in result.files:
+        print(f"  {path}")
+    trace = result.traceability
+    print(
+        f"  {trace['working_rows']} enregistrements de travail, {trace['active_corrections']} corrections, {trace['excluded_records']} exclus"
+    )
+    if result.neutralized_cells:
+        print(
+            f"  {result.neutralized_cells} cellule(s) neutralisée(s) contre l'injection de formules (préfixe « ' »)"
+        )
+    if not trace["analysis_up_to_date"]:
+        print(
+            f"  Attention : l'analyse est antérieure aux dernières actions. Relancez : sidadr analyze {args.session}"
+        )
+    return EXIT_OK
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    service = _service(args)
+    out = args.out or Path("exports") / f"rapport_{service.store.session_id}.html"
+    try:
+        path = write_report(service, out, args.examples)
+    except ValueError as exc:
+        print(exc)
+        return EXIT_ERROR
+    print(f"Rapport qualité : {path}")
+    return EXIT_OK
+
+
 def _shown(value: str | None) -> str:
     return "(vide)" if value is None else value
 
@@ -279,6 +323,20 @@ def register(
     p.add_argument("target")
     p.add_argument("--reason", required=True, help="motif obligatoire")
     p.set_defaults(func=cmd_undo)
+
+    p = session_parser("export", "exporter données de travail, constats, journal et traçabilité")
+    p.add_argument("session")
+    p.add_argument("--format", choices=["xlsx", "csv"], default="xlsx")
+    p.add_argument("--out", type=Path, help="dossier de sortie (défaut : exports/<session>)")
+    p.set_defaults(func=cmd_export)
+
+    p = session_parser("report", "générer le rapport qualité HTML")
+    p.add_argument("session")
+    p.add_argument(
+        "--out", type=Path, help="fichier HTML (défaut : exports/rapport_<session>.html)"
+    )
+    p.add_argument("--examples", type=int, default=10, help="exemples de constats par sévérité")
+    p.set_defaults(func=cmd_report)
 
     p = session_parser("history", "consulter le journal d'audit")
     p.add_argument("session")

@@ -233,6 +233,13 @@ Limites : prototype mono-utilisateur sans authentification. L'auteur est déclar
 
 **Acceptation** : un export réimporté dans SIDADR redonne les mêmes valeurs ; la fiche de traçabilité est toujours présente.
 
+**Statut : livré en Phase 10 (v0.1).** Commandes `sidadr export` et `sidadr report`.
+- **XLSX** : un classeur avec quatre onglets (Données de travail, Constats avec statut, Journal, Traçabilité). Toutes les cellules sont écrites comme du texte : aucune ne peut être interprétée comme une formule. Un test vérifie qu'un export relu restitue exactement les valeurs de la vue de travail, corrections comprises et exclusions retirées.
+- **CSV** : trois fichiers et un `.meta.json` de traçabilité. Une cellule texte commençant par `=`, `+`, `-`, `@` est préfixée d'une apostrophe, **sauf si c'est un nombre** (un montant négatif reste un montant). Le nombre de cellules neutralisées est indiqué dans la traçabilité.
+- **Traçabilité** : version de SIDADR, session, fichiers sources, empreinte de l'original, empreinte de chaque fichier de configuration et de règles, paramètres, nombre de corrections, d'exclusions et de décisions, intégrité du journal, fraîcheur de l'analyse (une analyse antérieure aux dernières corrections est signalée) et limites.
+- **Rapport HTML** : un seul fichier sans script ni ressource externe, imprimable. Il contient le score décomposé, les constats par sévérité, type et statut, des exemples variés, les règles appliquées, le journal et la traçabilité. Toutes les valeurs issues des données sont échappées : un nom contenant du HTML ne peut pas s'exécuter dans le rapport.
+- Le rapport HTML a été vérifié visuellement dans un navigateur à 1 280 px.
+
 ---
 
 ## Plan et estimation

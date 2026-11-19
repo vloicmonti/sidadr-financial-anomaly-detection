@@ -111,3 +111,15 @@ def test_invalid_actions_fail_cleanly(session: tuple[Path, str]) -> None:
     )
     assert main(["analyze", "S-absente", *ws]) == 1
     assert main(["sessions", *ws]) == 0
+
+
+def test_exports_and_report(session: tuple[Path, str], tmp_path: Path) -> None:
+    workspace, session_id = session
+    ws = ["--workspace", str(workspace)]
+    assert main(["export", session_id, "--format", "xlsx", "--out", str(tmp_path), *ws]) == 0
+    assert main(["export", session_id, "--format", "csv", "--out", str(tmp_path), *ws]) == 0
+    report = tmp_path / "rapport.html"
+    assert main(["report", session_id, "--out", str(report), *ws]) == 0
+    assert (tmp_path / f"sidadr_{session_id}.xlsx").exists()
+    assert (tmp_path / f"sidadr_{session_id}.meta.json").exists()
+    assert "Score qualité" in report.read_text(encoding="utf-8")

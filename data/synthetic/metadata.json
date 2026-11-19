@@ -24,7 +24,7 @@
   },
   "generator": {
     "generator_version": "1.0",
-    "sidadr_version": "0.1.0.dev0"
+    "sidadr_version": "0.1.0"
   },
   "notice": "Données entièrement synthétiques. Noms : combinaisons aléatoires de prénoms et noms courants ; téléphones : indicatif +999 non attribué ; banques et comptes fictifs.",
   "period": [
