@@ -7,10 +7,17 @@ from pathlib import Path
 import pytest
 
 from sidadr.cli import main
-from sidadr.config import load_duplicate_settings
+from sidadr.config import load_duplicate_settings, load_matching_settings
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
+from sidadr.evaluation.names import (
+    NameEvaluation,
+    evaluate_names,
+    load_customer_truth,
+    load_homonyms,
+)
 from sidadr.ingestion import ImportSession
 from sidadr.ingestion.importer import _slug
+from sidadr.name_matching import match_names
 from sidadr.profiling import DatasetProfile, profile_frame
 
 DATA = Path(__file__).resolve().parents[2] / "data" / "synthetic"
@@ -171,3 +178,54 @@ def test_cli_duplicates_command(tmp_path: Path) -> None:
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[0].startswith("group_id;kind;severity")
     assert len(lines) == 1 + 2 * 200  # 200 groupes de 2 enregistrements
+
+
+# ---------------------------------------------------------------- noms similaires (Phase 5)
+
+
+@pytest.fixture(scope="module")
+def name_evaluation(session: ImportSession) -> NameEvaluation:
+    report = match_names(session.frame, load_matching_settings(), session.schema)
+    truth_file = DATA / "_truth" / "customers.csv"
+    return evaluate_names(report, load_customer_truth(truth_file), load_homonyms(truth_file))
+
+
+def test_blocking_never_loses_a_true_pair(name_evaluation: NameEvaluation) -> None:
+    assert name_evaluation.true_pairs > 100
+    assert name_evaluation.blocking_recall == 1.0
+
+
+def test_high_similarity_is_precise(name_evaluation: NameEvaluation) -> None:
+    high = name_evaluation["high"]
+    assert high.precision == 1.0
+    assert high.recall >= 0.85
+    assert name_evaluation.homonyms_flagged_high == 0
+
+
+def test_every_true_pair_is_at_least_intermediate(name_evaluation: NameEvaluation) -> None:
+    assert name_evaluation[">= intermediate"].recall == 1.0
+
+
+def test_cli_names_command(tmp_path: Path) -> None:
+    files = [str(DATA / name) for name in FILES]
+    assert main(["names", *files]) == 2
+    out = tmp_path / "names.csv"
+    assert (
+        main(
+            [
+                "names",
+                *files,
+                "--accept-proposed",
+                "--category",
+                "high",
+                "--csv",
+                str(out),
+                "--limit",
+                "1",
+            ]
+        )
+        == 0
+    )
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("match_id;category;final_score")
+    assert all(";high;" in line for line in lines[1:])

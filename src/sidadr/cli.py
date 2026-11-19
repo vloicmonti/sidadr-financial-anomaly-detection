@@ -22,10 +22,18 @@ from typing import Any
 
 import yaml
 
-from sidadr.config import ConfigError, load_duplicate_settings
+from sidadr.config import ConfigError, load_duplicate_settings, load_matching_settings
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
 from sidadr.deduplication.detector import _SEVERITY as _KIND_SEVERITY
 from sidadr.ingestion import ImportRejected, ImportSession, Inspection, MappingError
+from sidadr.name_matching import (
+    WARNING,
+    Category,
+    Corroboration,
+    CustomerProfile,
+    MatchReport,
+    match_names,
+)
 from sidadr.profiling import DatasetProfile, QualityScore, compute_score, profile_frame
 
 EXIT_OK, EXIT_ERROR, EXIT_NEEDS_CONFIRMATION = 0, 1, 2
@@ -254,6 +262,99 @@ def cmd_duplicates(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+_MIN_CATEGORY = {
+    "high": (Category.HIGH,),
+    "intermediate": (Category.HIGH, Category.INTERMEDIATE),
+    "low": (Category.HIGH, Category.INTERMEDIATE, Category.LOW),
+}
+
+
+def _side(profile: CustomerProfile) -> list[str]:
+    return [
+        profile.name,
+        f"{profile.bank_code or '?'} / {profile.branch_code or '?'}",
+        profile.birth_date or "(non renseignée)",
+        profile.phone or "(non renseigné)",
+        f"{profile.label} ({len(profile.record_ids)} opérations)",
+    ]
+
+
+def _print_names(report: MatchReport, categories: tuple[Category, ...], limit: int) -> None:
+    print(
+        f"\n=== Noms similaires : {len(report.profiles)} fiches clients, {len(report.candidate_pairs)} paires comparées"
+    )
+    for category in Category:
+        matches = report.by_category(category)
+        cross = sum(1 for m in matches if not m.same_bank)
+        print(
+            f"  {category.label:<26} {len(matches):>5} paires  (dont {cross} entre banques différentes)"
+        )
+    if report.skipped_blocks:
+        print(f"  Blocs trop grands ignorés : {report.skipped_blocks}")
+    print(f"\n  Attention : {WARNING}")
+    shown = [m for m in report.matches if m.category in categories][:limit]
+    labels = ["Nom", "Banque / agence", "Naissance", "Téléphone", "Fiche"]
+    for m in shown:
+        print(
+            f"\n  [{m.match_id}] {m.category.label} — score final {m.final_score:.0f} (nom {m.name_score:.0f}, {m.strategy.value})"
+        )
+        for label, a, b in zip(labels, _side(m.left), _side(m.right), strict=True):
+            print(f"      {label:<16} {a:<36} | {b}")
+        for adj in m.adjustments:
+            print(f"      {adj.reason} ({adj.points:+.0f})")
+        if m.corroboration is Corroboration.UNVERIFIABLE:
+            print("      aucun champ corroborant comparable : catégorie plafonnée")
+
+
+def _write_names_csv(path: Path, report: MatchReport, categories: tuple[Category, ...]) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(
+            ["match_id", "category", "final_score", "name_score", "strategy", "corroboration",
+             "left_file", "left_customer", "left_bank", "left_name", "left_birth", "left_phone",
+             "right_file", "right_customer", "right_bank", "right_name", "right_birth", "right_phone",
+             "explanation"]
+        )  # fmt: skip
+        for m in report.matches:
+            if m.category not in categories:
+                continue
+            row: list[object] = [
+                m.match_id,
+                m.category.value,
+                m.final_score,
+                m.name_score,
+                m.strategy.value,
+                m.corroboration.value,
+            ]
+            for p in (m.left, m.right):
+                row += [p.import_id, p.customer_id, p.bank_code, p.name, p.birth_date, p.phone]
+            row.append(m.explanation())
+            writer.writerow([safe_cell(str(v)) if v is not None else "" for v in row])
+    print(f"Export CSV : {path}")
+
+
+def cmd_names(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
+    report = match_names(session.frame, load_matching_settings(), session.schema)
+    categories = _MIN_CATEGORY[args.category]
+    _print_names(report, categories, args.limit)
+    if args.csv:
+        _write_names_csv(args.csv, report, categories)
+    if args.json:
+        _write_json(
+            args.json,
+            {
+                "name_matches": [
+                    dataclasses.asdict(m) for m in report.matches if m.category in categories
+                ]
+            },
+        )
+    print("\n  Aucune fiche n'a été fusionnée ni modifiée.")
+    return EXIT_OK
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     from sidadr.synthetic.cli import main as generate_main
 
@@ -278,6 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("inspect", cmd_inspect, "lire des fichiers et proposer la correspondance des colonnes"),
         ("profile", cmd_profile, "importer des fichiers, profiler la session et calculer le score"),
         ("duplicates", cmd_duplicates, "détecter les doublons exacts de la session"),
+        ("names", cmd_names, "rapprocher les noms de clients similaires"),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("files", nargs="+", type=Path)
@@ -298,6 +400,15 @@ def build_parser() -> argparse.ArgumentParser:
                 "--csv", type=Path, help="exporter les groupes (une ligne par enregistrement)"
             )
             p.add_argument("--limit", type=int, default=10, help="nombre de groupes affichés")
+        if name == "names":
+            p.add_argument(
+                "--category",
+                choices=list(_MIN_CATEGORY),
+                default="intermediate",
+                help="catégorie minimale affichée et exportée",
+            )
+            p.add_argument("--csv", type=Path, help="exporter les paires (une ligne par paire)")
+            p.add_argument("--limit", type=int, default=5, help="nombre de paires affichées")
     return parser
 
 

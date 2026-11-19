@@ -237,3 +237,53 @@ def load_duplicate_settings(
     return DuplicateSettings(
         key_fields, bool(key.get("case_sensitive", False)), tuple(combinations)
     )
+
+
+# --------------------------------------------------------------------------- noms
+
+
+@dataclass(frozen=True)
+class MatchingSettings:
+    high: float = 92
+    intermediate: float = 88
+    low: float = 80
+    initials_score: float = 88
+    birth_date_match: float = 5
+    birth_date_mismatch: float = -25
+    phone_match: float = 5
+    phone_mismatch: float = -10
+    phone_significant_digits: int = 9
+    max_block_size: int = 600
+    cap_unverifiable: bool = True
+    cap_contradicted: bool = True
+
+
+def load_matching_settings(directory: Path | None = None) -> MatchingSettings:
+    raw = _load("matching.yaml", directory)
+    thresholds = raw.get("thresholds") or {}
+    corroboration = raw.get("corroboration") or {}
+    blocking = raw.get("blocking") or {}
+    try:
+        settings = MatchingSettings(
+            high=float(thresholds.get("high", 92)),
+            intermediate=float(thresholds.get("intermediate", 88)),
+            low=float(thresholds.get("low", 80)),
+            initials_score=float(raw.get("initials_score", 88)),
+            birth_date_match=float(corroboration.get("birth_date_match", 5)),
+            birth_date_mismatch=float(corroboration.get("birth_date_mismatch", -25)),
+            phone_match=float(corroboration.get("phone_match", 5)),
+            phone_mismatch=float(corroboration.get("phone_mismatch", -10)),
+            phone_significant_digits=int(corroboration.get("phone_significant_digits", 9)),
+            max_block_size=int(blocking.get("max_block_size", 600)),
+            cap_unverifiable=bool(raw.get("cap_unverifiable_at_intermediate", True)),
+            cap_contradicted=bool(raw.get("cap_contradicted_at_low", True)),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"matching.yaml : valeur invalide ({exc}).") from exc
+    if not 0 <= settings.low <= settings.intermediate <= settings.high <= 100:
+        raise ConfigError("matching.yaml : il faut 0 <= low <= intermediate <= high <= 100.")
+    if settings.birth_date_mismatch > 0 or settings.phone_mismatch > 0:
+        raise ConfigError("matching.yaml : une discordance doit diminuer le score (valeur <= 0).")
+    if settings.max_block_size < 2 or settings.phone_significant_digits < 4:
+        raise ConfigError("matching.yaml : max_block_size >= 2 et phone_significant_digits >= 4.")
+    return settings

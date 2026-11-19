@@ -113,6 +113,8 @@ Choix : la clé et les combinaisons sont configurables (`config/duplicates.yaml`
 
 **Acceptation** : les 5 variantes du brief (`JEAN PIERRE MANGA`, `Jean-Pierre Manga`, `JEANPIERRE MANGA`, `J. P. MANGA`, `MANGA JEAN PIERRE`) sont regroupées ; les homonymes distincts du manifeste avec date de naissance différente ne sont **pas** classés en similarité élevée ; précision et rappel publiés par catégorie.
 
+**Statut : livré en Phase 5** — méthode, calibration et limites détaillées dans [`NAME_MATCHING.md`](NAME_MATCHING.md). Seuils retenus après calibration : 92 / 88 / 80 (au lieu de 92 / 80 / 70 prévus), avec deux plafonds : non vérifiable → au plus intermédiaire, contredit → au plus faible.
+
 ## Module E — Clients multi-banques / multi-agences (Phase 6)
 
 Regroupe les correspondances du module D (et les identifiants exacts éventuels) **entre `bank_code` ou `branch_code` différents**, en groupes (composantes connexes). Pour chaque groupe : banques, agences, champs concordants/discordants, score, stratégie. Décision par groupe : valider, rejeter, scinder.

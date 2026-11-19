@@ -1,0 +1,35 @@
+# Rapprochement des noms de clients (Phase 5).
+# Une similarité de nom ne prouve jamais une identité : toute correspondance reste
+# une « alerte à examiner » jusqu'à décision humaine.
+# Calibration et justification des valeurs : docs/specs/NAME_MATCHING.md.
+
+thresholds:
+  # Catégories sur le score final (score de nom ajusté par les champs corroborants).
+  high: 92
+  intermediate: 88
+  low: 80
+
+# Plafonds de catégorie :
+# - sans date de naissance ni téléphone comparables, une paire ne peut pas être
+#   « élevée » (deux homonymes seraient indiscernables) ;
+# - si un champ corroborant diverge, la paire est au plus « faible ».
+cap_unverifiable_at_intermediate: true
+cap_contradicted_at_low: true
+
+# Score attribué quand un nom abrégé est compatible avec un nom complet
+# (« J. P. MANGA » / « Jean Pierre MANGA ») : des initiales restent une preuve faible.
+initials_score: 88
+
+corroboration:
+  birth_date_match: 5
+  birth_date_mismatch: -25
+  phone_match: 5
+  phone_mismatch: -10
+  # Les indicatifs pays varient d'un système à l'autre : seuls les N derniers chiffres
+  # du téléphone sont comparés.
+  phone_significant_digits: 9
+
+blocking:
+  # Deux fiches ne sont comparées que si elles partagent un début ou une fin de mot
+  # (3 lettres). Les blocs plus grands que cette limite sont ignorés et signalés.
+  max_block_size: 600
