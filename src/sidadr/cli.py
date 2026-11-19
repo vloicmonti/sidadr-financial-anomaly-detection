@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from sidadr import cli_session
 from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
 from sidadr.business_rules import RuleReport, RuleSet, evaluate_rules, load_rules
 from sidadr.config import (
@@ -31,6 +32,7 @@ from sidadr.config import (
     load_duplicate_settings,
     load_matching_settings,
 )
+from sidadr.correction import CorrectionError
 from sidadr.cross_entity import (
     EntityGroup,
     EntityReport,
@@ -50,6 +52,7 @@ from sidadr.name_matching import (
     match_names,
 )
 from sidadr.profiling import DatasetProfile, QualityScore, compute_score, profile_frame
+from sidadr.storage import WorkspaceError
 
 EXIT_OK, EXIT_ERROR, EXIT_NEEDS_CONFIRMATION = 0, 1, 2
 
@@ -667,6 +670,19 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "rules":
             p.add_argument("--csv", type=Path, help="exporter les violations")
             p.add_argument("--limit", type=int, default=3, help="exemples affichés par règle")
+
+    def add_import_options(p: argparse.ArgumentParser) -> None:
+        p.add_argument("files", nargs="+", type=Path)
+        p.add_argument("--sheet", help="feuille à lire dans les fichiers XLSX")
+        group = p.add_mutually_exclusive_group()
+        group.add_argument(
+            "--accept-proposed", action="store_true", help="confirmer les propositions"
+        )
+        group.add_argument(
+            "--mapping", type=Path, help="corrections YAML {fichier: {colonne: champ}}"
+        )
+
+    cli_session.register(sub, add_import_options, _load_session)
     return parser
 
 
@@ -678,7 +694,7 @@ def main(argv: list[str] | None = None) -> int:
         return int(args.func(args))
     except ImportRejected as exc:
         print(f"Import refusé : {exc}", file=sys.stderr)
-    except (MappingError, ConfigError) as exc:
+    except (MappingError, ConfigError, CorrectionError, WorkspaceError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
     return EXIT_ERROR
 

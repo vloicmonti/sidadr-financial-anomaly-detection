@@ -207,6 +207,23 @@ Actions : modifier une cellule, exclure un enregistrement, confirmer / rejeter u
 
 **Acceptation** : après N corrections puis annulation de toutes, la vue de travail est identique à l'original ; le journal contient 2N entrées ; une action sans motif est refusée.
 
+**Statut : livré en Phase 9.** Les trois critères d'acceptation sont couverts par des tests.
+
+Fonctionnement :
+- `sidadr session-create` importe les fichiers, puis enregistre un **instantané en lecture seule** (`original.parquet`) avec son empreinte SHA-256. L'empreinte est vérifiée à chaque ouverture : si l'original a été modifié, la session est bloquée.
+- **Vue de travail** = original + corrections actives − enregistrements exclus. `sidadr analyze` relance tous les détecteurs sur cette vue et enregistre les constats (`findings.json`).
+- **Décisions** (`confirmed`, `rejected`, `kept_both`, `deferred`) : elles sont rattachées à une **clé stable** (type de constat, règle, enregistrements), pas au numéro du constat, qui change d'une analyse à l'autre. Une décision survit donc à une nouvelle analyse. Une décision ne modifie jamais les données.
+- **Corrections** typées : un montant doit être un nombre, une date une date valide, un type d'opération une valeur autorisée ; un champ obligatoire ne peut pas être vidé. Motif d'au moins 5 caractères obligatoire.
+- **Exclusion** : l'enregistrement est retiré de la vue de travail, pas supprimé.
+- **Annulation** (`sidadr undo C12` ou `D3`) : toute correction, exclusion ou décision est réversible, et l'annulation est elle-même journalisée.
+
+Journal d'audit (`journal.sqlite`) :
+- en **ajout seul**, imposé par des déclencheurs SQLite (toute modification ou suppression est refusée) ; les corrections et décisions ne peuvent pas non plus être supprimées, seulement annulées ;
+- **chaîné par empreintes** : chaque entrée contient l'empreinte de la précédente. `sidadr history --verify` recalcule la chaîne et indique la première entrée altérée, même si quelqu'un a contourné les déclencheurs en modifiant le fichier directement ;
+- chaque entrée : horodatage UTC, session, auteur, type d'action, cible, enregistrement, champ, ancienne et nouvelle valeur, motif, constat.
+
+Limites : prototype mono-utilisateur sans authentification. L'auteur est déclaré (`--actor`, ou l'utilisateur du système) et non vérifié. La chaîne d'empreintes détecte une falsification, mais ne l'empêche pas : quelqu'un qui réécrirait toute la chaîne depuis le début ne serait pas détecté, faute de signature externe.
+
 ## Module I — Exports et rapports (Phase 10)
 
 - Exports CSV et XLSX : dataset de travail, constats (par famille), doublons, corrections.
