@@ -18,7 +18,7 @@
 
 Références d'inspiration (non copiées) : clarté et finition de Stripe, cohérence de navigation de Linear, expérience financière de Ramp.
 
-**Historique de la décision** : une première direction « institutionnelle » (barre latérale bleu nuit, IBM Plex, coins 4–8 px, forte densité) a été maquettée puis écartée au profit de cette variante, jugée plus moderne. Le skill `ui-ux-pro-max` proposait un thème sombre avec accent vert et la police Fira Code : écarté, car contraire au brief (fond clair, bleu institutionnel) et parce que le vert signifie ici « contrôle validé », pas « action ».
+**Historique de la décision** : une première direction « institutionnelle » (barre latérale bleu nuit, IBM Plex, coins 4–8 px, forte densité) a été maquettée puis écartée au profit de cette variante, jugée plus moderne. Un thème sombre avec accent vert et police Fira Code a aussi été envisagé, puis écarté : il était contraire au brief (fond clair, bleu institutionnel), et le vert signifie ici « contrôle validé », pas « action ».
 
 ## 2. Couleurs
 

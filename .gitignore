@@ -16,7 +16,6 @@ htmlcov/
 
 # Configuration locale et secrets
 .env
-.claude/
 
 # Espace de travail de l'application (imports, snapshots, base SQLite)
 workspace/
