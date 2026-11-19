@@ -1,0 +1,79 @@
+# Schéma canonique des opérations bancaires.
+# - type : text | decimal | date | enum
+# - required : champ obligatoire (compte dans la complétude)
+# - synonyms : en-têtes reconnus automatiquement (comparés après normalisation :
+#   minuscules, sans accents, sans espaces ni ponctuation). Toute correspondance
+#   proposée doit encore être confirmée par l'utilisateur.
+
+fields:
+  transaction_id:
+    label: Identifiant d'opération
+    type: text
+    required: true
+    synonyms: [transaction_id, transaction id, txn_id, ref_operation, reference, ref, id_operation, numero_operation]
+  bank_code:
+    label: Code banque
+    type: text
+    required: true
+    synonyms: [bank_code, bank, banque, code_banque, etablissement, code_etablissement]
+  branch_code:
+    label: Code agence
+    type: text
+    required: true
+    synonyms: [branch_code, branch, agence, code_agence, guichet, code_guichet]
+  branch_city:
+    label: Ville de l'agence
+    type: text
+    required: false
+    synonyms: [branch_city, branch city, ville, ville_agence, city]
+  customer_id:
+    label: Identifiant client
+    type: text
+    required: true
+    synonyms: [customer_id, customer id, client_id, num_client, numero_client, id_client, code_client]
+  customer_name:
+    label: Nom du client
+    type: text
+    required: true
+    synonyms: [customer_name, customer name, client, nom_client, nom, name, nom_complet, raison_sociale]
+  birth_date:
+    label: Date de naissance
+    type: date
+    required: false
+    synonyms: [birth_date, birth date, date_naissance, naissance, date_of_birth, dob]
+  phone:
+    label: Téléphone
+    type: text
+    required: false
+    synonyms: [phone, tel, telephone, mobile, phone_number, numero_telephone]
+  account_number:
+    label: Numéro de compte
+    type: text
+    required: true
+    synonyms: [account_number, account number, account, compte, num_compte, numero_compte]
+  operation_type:
+    label: Type d'opération
+    type: enum
+    required: true
+    values: [DEPOSIT, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT, FEE]
+    synonyms: [operation_type, operation, type_operation, type_op, type, nature_operation]
+  transaction_date:
+    label: Date d'opération
+    type: date
+    required: true
+    synonyms: [transaction_date, transaction date, date_operation, date, date_op]
+  value_date:
+    label: Date de valeur
+    type: date
+    required: false
+    synonyms: [value_date, value date, date_valeur, date_de_valeur]
+  amount:
+    label: Montant
+    type: decimal
+    required: true
+    synonyms: [amount, montant, valeur, montant_operation]
+  currency:
+    label: Devise
+    type: text
+    required: true
+    synonyms: [currency, devise, monnaie, ccy]

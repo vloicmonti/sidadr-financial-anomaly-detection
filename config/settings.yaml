@@ -1,0 +1,15 @@
+# Limites d'import (protection contre les fichiers trop gros ou malformés).
+import:
+  allowed_extensions: [".csv", ".xlsx"]
+  max_file_mb: 50
+  max_rows: 1000000
+  max_columns: 200
+  # XLSX = archive ZIP : on refuse les archives dont la taille décompressée ou le
+  # taux de compression trahissent une « bombe de décompression ».
+  xlsx_max_uncompressed_mb: 300
+  xlsx_max_compression_ratio: 100
+  csv_sample_bytes: 65536
+
+profiling:
+  top_values: 5
+  sample_record_ids: 5

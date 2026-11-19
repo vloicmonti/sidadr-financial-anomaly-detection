@@ -57,6 +57,11 @@ Le dictionnaire de données complet sera produit en Phase 2 (`docs/data_dictiona
 
 **Acceptation** : chaque fichier synthétique hétérogène est lu correctement ; un fichier tronqué, binaire renommé en `.csv`, vide ou trop gros produit une erreur claire, jamais une exception non gérée.
 
+**Statut : livré en Phase 3.** Écarts assumés par rapport à la spécification :
+- Détection d'encodage par règle simple (UTF-8 valide, sinon Windows-1252, sinon Latin-1 avec avertissement) plutôt que `charset-normalizer` : explicable, sans dépendance, suffisant pour les exports bancaires courants.
+- Similarité des en-têtes avec `difflib` (bibliothèque standard) ; RapidFuzz arrivera en Phase 5 pour les noms de clients.
+- L'ordre jour/mois d'une colonne est décidé à la majorité ; jusqu'à 5 % de valeurs contradictoires sont signalées comme dates impossibles au lieu de rendre la colonne ambiguë.
+
 ## Module B — Profilage et score qualité (Phase 3)
 
 Par colonne : nb valeurs, manquantes, uniques, doublons, type dominant et taux de conformité, min/max/médiane/quantiles, distribution, dates hors plage.
@@ -73,6 +78,11 @@ Par colonne : nb valeurs, manquantes, uniques, doublons, type dominant et taux d
 Le score est toujours affiché **avec sa décomposition** et la mention « indicateur interne paramétrable ». Les valeurs atypiques et alertes de similarité **ne pénalisent pas** le score (ce ne sont pas des erreurs).
 
 **Acceptation** : un fichier parfait obtient 100 ; chaque défaut injecté fait baisser la bonne dimension ; changer les poids change le score de façon calculable à la main.
+
+**Statut : livré en Phase 3.** Mesuré sur le jeu de référence : 100 % des valeurs obligatoires manquantes, des dates impossibles et des montants non numériques injectés sont retrouvés, sans faux positif. Limites actuelles :
+- La cohérence (règles métier) n'est pas encore évaluée : son poids est redistribué et le rapport le dit.
+- L'unicité compare des lignes complètes après normalisation des dates et montants ; les téléphones ne sont pas normalisés, donc la plupart des doublons inter-fichiers échappent à cette mesure. Ils seront détectés par clé en Phase 4.
+- Les défauts injectés étant rares (environ 1 % des lignes), le score du jeu de référence est élevé (99,6). C'est attendu : le score mesure une proportion, pas un nombre d'alertes.
 
 ## Module C — Doublons exacts (Phase 4)
 
