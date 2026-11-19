@@ -84,6 +84,24 @@ Sous macOS ou Linux, remplacer `.venv\Scripts\` par `.venv/bin/`.
 
 Les sessions sont enregistrées dans `workspace/` (ignoré par Git), les exports dans `exports/`.
 
+### Interface web (en construction)
+
+L'interface React (Vite, TypeScript strict, Tailwind) s'appuie sur l'API locale. Prérequis : Node.js 22.13 ou plus récent.
+
+```powershell
+.venv\Scripts\sidadr serve
+```
+
+Dans un second terminal :
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles : liste des sessions et vue d'ensemble (lancement de l'analyse, score, constats par sévérité, état de la revue). Les autres écrans arrivent au fil de la phase 11.
+
 ## Architecture
 
 ```mermaid
