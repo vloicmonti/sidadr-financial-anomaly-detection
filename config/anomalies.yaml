@@ -1,0 +1,24 @@
+# Détection des valeurs statistiquement atypiques (Phase 7).
+# Une valeur atypique n'est PAS une erreur : c'est une valeur rare dans son groupe,
+# à vérifier. Le score statistique ne qualifie jamais une opération de fraude.
+
+# Champs numériques analysés.
+fields: [amount]
+
+# Les montants sont comparés à des opérations comparables : même type, même devise.
+group_by: [operation_type, currency]
+
+# Les montants financiers sont très asymétriques (beaucoup de petits, peu de gros) :
+# les méthodes travaillent sur le logarithme, puis les seuils sont reconvertis en montants.
+log_transform: true
+
+# Un groupe trop petit ne permet pas d'estimer une distribution : il est ignoré et signalé.
+min_group_size: 30
+
+methods:
+  robust_zscore:
+    enabled: true
+    threshold: 3.5   # Iglewicz et Hoaglin (1993)
+  iqr:
+    enabled: true
+    k: 3.0           # « valeurs extrêmes » au sens de Tukey

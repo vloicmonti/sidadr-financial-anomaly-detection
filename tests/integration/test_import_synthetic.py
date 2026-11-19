@@ -6,10 +6,17 @@ from pathlib import Path
 
 import pytest
 
+from sidadr.anomaly_detection import detect_anomalies
 from sidadr.cli import main
-from sidadr.config import CrossEntitySettings, load_duplicate_settings, load_matching_settings
+from sidadr.config import (
+    CrossEntitySettings,
+    load_anomaly_settings,
+    load_duplicate_settings,
+    load_matching_settings,
+)
 from sidadr.cross_entity import group_entities
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
+from sidadr.evaluation.anomalies import evaluate_anomalies, load_defects
 from sidadr.evaluation.entities import evaluate_entities
 from sidadr.evaluation.names import (
     NameEvaluation,
@@ -279,3 +286,30 @@ def test_cli_entities_command(tmp_path: Path) -> None:
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[0].startswith("group_id;scope;confidence")
     assert all(";multi_bank;" in line for line in lines[1:])
+
+
+# ---------------------------------------------------------------- anomalies (Phase 7)
+
+
+def test_atypical_amounts_are_found(session: ImportSession) -> None:
+    report = detect_anomalies(
+        session.frame, load_anomaly_settings(schema=session.schema), session.schema
+    )
+    evaluation = evaluate_anomalies(report, load_defects(DATA / "_truth" / "defects_manifest.csv"))
+    assert evaluation.injected_atypical == 80
+    assert evaluation.recall >= 0.95
+    assert (
+        evaluation.explained_by_other_defects == 20
+    )  # frais au-dessus du plafond, réellement extrêmes
+    assert evaluation.precision >= 0.75
+    assert all(a.severity.value == "atypical_value" for a in report.anomalies)
+
+
+def test_cli_anomalies_command(tmp_path: Path) -> None:
+    files = [str(DATA / name) for name in FILES]
+    assert main(["anomalies", *files]) == 2
+    out = tmp_path / "anomalies.csv"
+    assert main(["anomalies", *files, "--accept-proposed", "--csv", str(out), "--limit", "0"]) == 0
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("anomaly_id;record_id;field")
+    assert len(lines) > 100

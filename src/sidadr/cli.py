@@ -22,8 +22,10 @@ from typing import Any
 
 import yaml
 
+from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
 from sidadr.config import (
     ConfigError,
+    load_anomaly_settings,
     load_cross_entity_settings,
     load_duplicate_settings,
     load_matching_settings,
@@ -431,6 +433,73 @@ def cmd_entities(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _amount(value: float) -> str:
+    return f"{value:,.0f}".replace(",", " ") if value >= 100 else f"{value:,.2f}".replace(",", " ")
+
+
+def _print_anomalies(report: AnomalyReport, limit: int) -> None:
+    s = report.settings
+    methods = [
+        m for m, on in (("z-score robuste", s.robust_z_enabled), ("IQR", s.iqr_enabled)) if on
+    ]
+    print(
+        f"\n=== Valeurs atypiques : {len(report.anomalies)} "
+        f"({', '.join(methods)} ; {'échelle logarithmique' if s.log_transform else 'échelle brute'})"
+    )
+    print(
+        f"  {'Groupe':<26}{'Opérations':>11}{'Médiane':>14}{'Seuil bas':>13}{'Seuil haut':>15}{'Signalées':>11}"
+    )
+    for g in report.groups:
+        low, high = g.robust_z_bounds or (g.lower_bound, g.upper_bound)
+        n = sum(1 for a in report.anomalies if a.stats is g)
+        print(
+            f"  {' · '.join(g.group):<26}{g.count:>11}{_amount(g.median):>14}{_amount(low):>13}{_amount(high):>15}{n:>11}"
+        )
+    for note in report.notes:
+        print(f"  Note : {note}")
+    if report.excluded_values:
+        print(
+            f"  {report.excluded_values} valeurs non analysées (non numériques, nulles ou négatives : voir les règles métier)."
+        )
+    for a in report.anomalies[:limit]:
+        print(f"\n  [{a.anomaly_id}] {a.record_id} — {a.severity.label}")
+        print(f"      {a.explanation(s)}")
+    print(
+        "\n  Une valeur atypique n'est pas une erreur et ne qualifie jamais une opération de fraude."
+    )
+
+
+def _write_anomalies_csv(path: Path, report: AnomalyReport) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(
+            ["anomaly_id", "record_id", "field", "value", "group", "direction", "robust_z",
+             "methods", "group_median", "threshold", "severity", "explanation"]
+        )  # fmt: skip
+        for a in report.anomalies:
+            row: list[object] = [
+                a.anomaly_id, a.record_id, a.field, a.raw_value, " · ".join(a.group), a.direction,
+                a.robust_z, "+".join(a.methods), round(a.stats.median, 2),
+                a.threshold_text(report.settings), a.severity.value, a.explanation(report.settings),
+            ]  # fmt: skip
+            writer.writerow([safe_cell(str(v)) if v is not None else "" for v in row])
+    print(f"Export CSV : {path}")
+
+
+def cmd_anomalies(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
+    settings = load_anomaly_settings(schema=session.schema)
+    report = detect_anomalies(session.frame, settings, session.schema)
+    _print_anomalies(report, args.limit)
+    if args.csv:
+        _write_anomalies_csv(args.csv, report)
+    if args.json:
+        _write_json(args.json, {"anomalies": [dataclasses.asdict(a) for a in report.anomalies]})
+    return EXIT_OK
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     from sidadr.synthetic.cli import main as generate_main
 
@@ -461,6 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_entities,
             "clients possiblement présents dans plusieurs banques ou agences",
         ),
+        ("anomalies", cmd_anomalies, "valeurs statistiquement atypiques par groupe d'opérations"),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("files", nargs="+", type=Path)
@@ -499,6 +569,9 @@ def build_parser() -> argparse.ArgumentParser:
             )
             p.add_argument("--csv", type=Path, help="exporter les groupes (une ligne par fiche)")
             p.add_argument("--limit", type=int, default=5, help="nombre de groupes affichés")
+        if name == "anomalies":
+            p.add_argument("--csv", type=Path, help="exporter les valeurs atypiques")
+            p.add_argument("--limit", type=int, default=10, help="nombre de valeurs affichées")
     return parser
 
 

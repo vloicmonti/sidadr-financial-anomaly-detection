@@ -304,3 +304,54 @@ def load_cross_entity_settings(directory: Path | None = None) -> CrossEntitySett
     if min_category not in ("high", "intermediate", "low"):
         raise ConfigError("cross_entity.yaml : min_category doit valoir high, intermediate ou low.")
     return CrossEntitySettings(min_category, bool(raw.get("include_multi_branch", True)))
+
+
+# --------------------------------------------------------------------------- anomalies
+
+
+@dataclass(frozen=True)
+class AnomalySettings:
+    fields: tuple[str, ...] = ("amount",)
+    group_by: tuple[str, ...] = ("operation_type", "currency")
+    log_transform: bool = True
+    min_group_size: int = 30
+    robust_z_enabled: bool = True
+    robust_z_threshold: float = 3.5
+    iqr_enabled: bool = True
+    iqr_k: float = 3.0
+
+
+def load_anomaly_settings(
+    directory: Path | None = None, schema: Schema | None = None
+) -> AnomalySettings:
+    raw = _load("anomalies.yaml", directory)
+    schema = schema or load_schema(directory)
+    methods = raw.get("methods") or {}
+    rz = methods.get("robust_zscore") or {}
+    iqr = methods.get("iqr") or {}
+    try:
+        settings = AnomalySettings(
+            fields=tuple(str(f) for f in raw.get("fields", ["amount"])),
+            group_by=tuple(str(f) for f in raw.get("group_by", [])),
+            log_transform=bool(raw.get("log_transform", True)),
+            min_group_size=int(raw.get("min_group_size", 30)),
+            robust_z_enabled=bool(rz.get("enabled", True)),
+            robust_z_threshold=float(rz.get("threshold", 3.5)),
+            iqr_enabled=bool(iqr.get("enabled", True)),
+            iqr_k=float(iqr.get("k", 3.0)),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"anomalies.yaml : valeur invalide ({exc}).") from exc
+    for name in settings.fields:
+        if name not in schema.names or schema[name].type != "decimal":
+            raise ConfigError(f"anomalies.yaml : {name!r} n'est pas un champ numérique du schéma.")
+    unknown = sorted(set(settings.group_by) - set(schema.names))
+    if unknown:
+        raise ConfigError(
+            f"anomalies.yaml : champs de regroupement inconnus : {', '.join(unknown)}."
+        )
+    if not (settings.robust_z_enabled or settings.iqr_enabled):
+        raise ConfigError("anomalies.yaml : au moins une méthode doit être activée.")
+    if settings.robust_z_threshold <= 0 or settings.iqr_k <= 0 or settings.min_group_size < 5:
+        raise ConfigError("anomalies.yaml : seuils positifs et min_group_size >= 5 requis.")
+    return settings

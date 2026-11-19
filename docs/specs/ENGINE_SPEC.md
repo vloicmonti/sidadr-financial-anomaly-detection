@@ -143,6 +143,24 @@ La pureté est la part des groupes dont toutes les fiches désignent réellement
 
 **Acceptation** : montants atypiques injectés détectés ; chaque constat contient valeur, méthode, seuil chiffré, groupe, explication et recommandation.
 
+**Statut : livré en Phase 7.** Choix et écarts :
+- Les méthodes travaillent sur le **logarithme** des montants. Sur l'échelle brute, le z-score robuste signalait 1 530 opérations, presque toutes saines : la queue droite naturelle des montants financiers suffit à dépasser le seuil.
+- Les **bornes métier** (ex. plafond des frais) sont déplacées vers le moteur de règles (Phase 8). Ce sont des règles, pas des statistiques, et les dupliquer ici créerait deux constats pour une même cause.
+- **Isolation Forest et LOF ne sont pas implémentés.** Étudiés puis écartés : les défauts du jeu de référence sont univariés, donc une méthode multivariée ne pourrait pas être validée ; ses scores sont aussi plus difficiles à expliquer à un contrôleur. À reconsidérer avec des données réelles et des variables contextuelles (historique du client, canal).
+- Les groupes de moins de 30 opérations ne sont pas analysés et sont listés (ici, les devises invalides).
+
+Mesuré sur le jeu de référence (z-score robuste 3,5 et IQR k = 3, sur le logarithme, par type d'opération × devise) :
+
+| Graine | Atypiques injectés retrouvés | Signalements | Dont frais au-dessus du plafond | Sans défaut injecté |
+|---|---:|---:|---:|---:|
+| 42 | 77 / 80 (96 %) | 122 | 20 | 25 |
+| 123 | 79 / 80 (99 %) | 134 | 19 | 36 |
+| 2024 | 79 / 80 (99 %) | 132 | 19 | 34 |
+
+- Les atypiques **oubliés** sont des virements injectés à environ 1,7 fois le maximum des montants sains, sous le seuil standard de 3,5. Abaisser le seuil à 3,0 les retrouverait tous, mais doublerait les signalements sans défaut.
+- Les **signalements sans défaut injecté** sont surtout de petits frais (« valeur basse »). Dans le générateur, les frais suivent une loi uniforme et non log-normale : l'hypothèse log-normale les rend atypiques côté bas. C'est une vraie limite de la méthode, à surveiller sur des données réelles.
+- L'IQR avec k = 3 ne signale rien que le z-score robuste n'ait déjà vu ; il est conservé comme seconde lecture, plus intuitive (« hors de l'intervalle habituel »).
+
 ## Module G — Règles métier (Phase 8)
 
 Règles déclaratives dans `config/rules/*.yaml` :
