@@ -190,3 +190,50 @@ def default_schema() -> Schema:
 @lru_cache(maxsize=1)
 def default_settings() -> Settings:
     return load_settings()
+
+
+# --------------------------------------------------------------------------- doublons
+
+
+@dataclass(frozen=True)
+class CombinationRule:
+    name: str
+    description: str
+    fields: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DuplicateSettings:
+    key_fields: tuple[str, ...] = ("transaction_id",)
+    key_case_sensitive: bool = False
+    combinations: tuple[CombinationRule, ...] = ()
+
+
+def load_duplicate_settings(
+    directory: Path | None = None, schema: Schema | None = None
+) -> DuplicateSettings:
+    raw = _load("duplicates.yaml", directory)
+    schema = schema or load_schema(directory)
+    key = raw.get("business_key") or {}
+    key_fields = tuple(str(f) for f in key.get("fields", []))
+    if not key_fields:
+        raise ConfigError("duplicates.yaml : business_key.fields doit lister au moins un champ.")
+    combinations = []
+    for spec in raw.get("combinations") or []:
+        fields = tuple(str(f) for f in spec.get("fields", []))
+        if len(fields) < 2:
+            raise ConfigError(
+                f"duplicates.yaml : la combinaison {spec.get('name')!r} doit avoir 2 champs."
+            )
+        combinations.append(
+            CombinationRule(str(spec.get("name")), str(spec.get("description", "")), fields)
+        )
+    unknown = sorted(
+        {f for f in key_fields + tuple(f for c in combinations for f in c.fields)}
+        - set(schema.names)
+    )
+    if unknown:
+        raise ConfigError(f"duplicates.yaml : champs inconnus du schéma : {', '.join(unknown)}.")
+    return DuplicateSettings(
+        key_fields, bool(key.get("case_sensitive", False)), tuple(combinations)
+    )

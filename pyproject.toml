@@ -38,7 +38,9 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # caractères accentués et typographiques français assumés
+# E501 : la longueur du code est gérée par `ruff format` ; seules les chaînes de texte
+# françaises peuvent dépasser, et les couper nuirait à leur lisibilité.
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.12"

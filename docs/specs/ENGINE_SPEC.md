@@ -90,6 +90,17 @@ Quatre niveaux : ligne complète ; clé métier (`transaction_id`) ; combinaison
 
 **Acceptation** : rappel 100 % sur les doublons exacts du manifeste, 0 faux positif ; aucun enregistrement supprimé.
 
+**Statut : livré en Phase 4.** Mesuré sur le jeu de référence : 120/120 lignes identiques, 60/60 doublons d'identifiant et 20/20 doublons inter-fichiers retrouvés, avec exactement les bons enregistrements, et aucune alerte de combinaison parasite.
+
+| Niveau | Sévérité | Raison |
+|---|---|---|
+| Lignes strictement identiques | Erreur certaine | un identifiant d'opération doit être unique |
+| Même identifiant, valeurs différentes | Erreur certaine | idem ; les champs divergents sont listés avec leurs valeurs d'origine |
+| Même identifiant dans plusieurs fichiers | Incohérence probable | une même opération ne devrait relever que d'une source, mais un recouvrement d'extractions est possible |
+| Même combinaison compte / date / type / montant / devise | Alerte à examiner | deux opérations identiques peuvent être légitimes |
+
+Choix : la clé et les combinaisons sont configurables (`config/duplicates.yaml`) ; la comparaison des identifiants ignore la casse par défaut ; une combinaison déjà expliquée par un doublon d'identifiant n'est pas signalée une seconde fois. L'unicité du score qualité utilise désormais ce détecteur (lignes impliquées dans un doublon d'identifiant) ; les alertes de combinaison ne la pénalisent pas.
+
 ## Module D — Noms similaires (Phase 5)
 
 1. **Normalisation** : NFKD + suppression des accents, majuscules, tirets/apostrophes/points → espaces, espaces multiples réduits. Version « collée » sans espaces conservée en parallèle.

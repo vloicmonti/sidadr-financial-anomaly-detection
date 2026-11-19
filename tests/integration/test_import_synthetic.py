@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from sidadr.cli import main
+from sidadr.config import load_duplicate_settings
+from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
 from sidadr.ingestion import ImportSession
 from sidadr.ingestion.importer import _slug
 from sidadr.profiling import DatasetProfile, profile_frame
@@ -106,3 +108,66 @@ def test_cli_applies_a_mapping_file(tmp_path: Path) -> None:
     assert main(["profile", str(DATA / "gamma_T2.csv"), "--mapping", str(mapping)]) == 0
     mapping.write_text("gamma_T2.csv:\n  montant: null\n", encoding="utf-8")
     assert main(["profile", str(DATA / "gamma_T2.csv"), "--mapping", str(mapping)]) == 1
+
+
+# ---------------------------------------------------------------- doublons (Phase 4)
+
+
+@pytest.fixture(scope="module")
+def duplicates(session: ImportSession) -> DuplicateReport:
+    return detect_duplicates(
+        session.frame, load_duplicate_settings(schema=session.schema), session.schema
+    )
+
+
+def _expected_groups(manifest: list[dict[str, str]], defect_type: str) -> set[frozenset[str]]:
+    groups = set()
+    for e in manifest:
+        if e["defect_type"] != defect_type:
+            continue
+        related = [
+            _record_id({"file": r.split(":")[0], "row": r.split(":")[1]})
+            for r in e["related_rows"].split(";")
+        ]
+        groups.add(frozenset([_record_id(e), *related]))
+    return groups
+
+
+@pytest.mark.parametrize(
+    ("defect_type", "kind"),
+    [
+        ("exact_duplicate_row", DuplicateKind.EXACT_ROW),
+        ("duplicate_key", DuplicateKind.KEY),
+        ("cross_file_duplicate", DuplicateKind.CROSS_FILE),
+    ],
+)
+def test_duplicates_match_the_manifest_exactly(
+    duplicates: DuplicateReport,
+    manifest: list[dict[str, str]],
+    defect_type: str,
+    kind: DuplicateKind,
+) -> None:
+    expected = _expected_groups(manifest, defect_type)
+    found = {frozenset(g.record_ids) for g in duplicates.by_kind(kind)}
+    assert found == expected  # rappel et précision = 100 %
+
+
+def test_duplicate_key_groups_differ_only_on_the_injected_field(
+    duplicates: DuplicateReport,
+) -> None:
+    for group in duplicates.by_kind(DuplicateKind.KEY):
+        assert [d.field for d in group.differences] == ["amount"]
+
+
+def test_no_spurious_combination_alert_on_the_reference_set(duplicates: DuplicateReport) -> None:
+    assert duplicates.by_kind(DuplicateKind.COMBINATION) == []
+
+
+def test_cli_duplicates_command(tmp_path: Path) -> None:
+    files = [str(DATA / name) for name in FILES]
+    assert main(["duplicates", *files]) == 2
+    out = tmp_path / "dups.csv"
+    assert main(["duplicates", *files, "--accept-proposed", "--csv", str(out), "--limit", "0"]) == 0
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("group_id;kind;severity")
+    assert len(lines) == 1 + 2 * 200  # 200 groupes de 2 enregistrements

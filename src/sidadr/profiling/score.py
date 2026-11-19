@@ -37,15 +37,29 @@ class QualityScore:
         return next(d for d in self.dimensions if d.name == name)
 
 
-def _measure(name: str, profile: DatasetProfile) -> tuple[float | None, int, int, str]:
+def _measure(
+    name: str, profile: DatasetProfile, duplicate_rows: int | None
+) -> tuple[float | None, int, int, str]:
     if name == "completeness":
         required = [c for c in profile.columns if c.required]
         bad = sum(c.missing for c in required)
         total = profile.n_rows * len(required)
         return (1 - bad / total if total else 1.0), bad, total, ""
     if name == "uniqueness":
-        bad, total = profile.duplicate_rows, profile.n_rows
-        return (1 - bad / total if total else 1.0), bad, total, ""
+        total = profile.n_rows
+        if duplicate_rows is None:
+            bad = profile.duplicate_rows
+            note = (
+                "lignes complètes identiques après normalisation "
+                "(détecteur de doublons non exécuté)"
+            )
+        else:
+            bad = duplicate_rows
+            note = (
+                "enregistrements impliqués dans un doublon d'identifiant "
+                "(même fichier ou inter-fichiers)"
+            )
+        return (1 - bad / total if total else 1.0), bad, total, note
     if name == "validity":
         checked = [c for c in profile.columns if c.checked_for_validity]
         bad = sum(c.invalid for c in checked)
@@ -57,10 +71,15 @@ def _measure(name: str, profile: DatasetProfile) -> tuple[float | None, int, int
 
 
 def compute_score(
-    profile: DatasetProfile, dimensions: tuple[Dimension, ...] | None = None
+    profile: DatasetProfile,
+    dimensions: tuple[Dimension, ...] | None = None,
+    *,
+    duplicate_rows: int | None = None,
 ) -> QualityScore:
+    """Calcule le score. `duplicate_rows` (issu du module de doublons) remplace la mesure
+    approximative d'unicité du profil lorsqu'il est fourni."""
     dimensions = dimensions or load_quality_dimensions()
-    measured = [(d, *_measure(d.name, profile)) for d in dimensions]
+    measured = [(d, *_measure(d.name, profile, duplicate_rows)) for d in dimensions]
     evaluated_weight = sum(d.weight for d, value, *_ in measured if value is not None)
 
     results = []

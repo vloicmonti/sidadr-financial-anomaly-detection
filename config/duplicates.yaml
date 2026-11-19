@@ -1,0 +1,17 @@
+# Détection des doublons exacts (Phase 4).
+# Les valeurs sont comparées après normalisation légère : dates en ISO, montants
+# normalisés, espaces de bord retirés. Rien n'est jamais supprimé automatiquement.
+
+business_key:
+  # Identifiant qui doit être unique pour une opération.
+  fields: [transaction_id]
+  # false : « tx-balp-1 » et « TX-BALP-1 » sont considérés identiques.
+  case_sensitive: false
+
+# Combinaisons de champs qui, identiques, désignent probablement la même opération
+# même sans identifiant commun. Ce sont des alertes à examiner : deux retraits égaux
+# le même jour sur un même compte peuvent être légitimes.
+combinations:
+  - name: same_operation
+    description: Même compte, même date, même type, même montant et même devise
+    fields: [account_number, transaction_date, operation_type, amount, currency]

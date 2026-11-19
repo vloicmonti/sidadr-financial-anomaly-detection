@@ -12,6 +12,7 @@ La correspondance des colonnes n'est jamais appliquée sans confirmation explici
 from __future__ import annotations
 
 import argparse
+import csv
 import dataclasses
 import json
 import sys
@@ -21,11 +22,28 @@ from typing import Any
 
 import yaml
 
-from sidadr.config import ConfigError
+from sidadr.config import ConfigError, load_duplicate_settings
+from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
+from sidadr.deduplication.detector import _SEVERITY as _KIND_SEVERITY
 from sidadr.ingestion import ImportRejected, ImportSession, Inspection, MappingError
 from sidadr.profiling import DatasetProfile, QualityScore, compute_score, profile_frame
 
 EXIT_OK, EXIT_ERROR, EXIT_NEEDS_CONFIRMATION = 0, 1, 2
+
+#: Niveaux de doublons qui comptent dans l'unicité du score (les combinaisons sont des alertes).
+KEY_LEVELS = (DuplicateKind.EXACT_ROW, DuplicateKind.KEY, DuplicateKind.CROSS_FILE)
+
+_KIND_LABELS = {
+    DuplicateKind.EXACT_ROW: "Lignes strictement identiques",
+    DuplicateKind.KEY: "Même identifiant, valeurs différentes",
+    DuplicateKind.CROSS_FILE: "Même identifiant, fichiers différents",
+    DuplicateKind.COMBINATION: "Même combinaison de champs",
+}
+
+
+def safe_cell(value: str) -> str:
+    """Neutralise l'injection de formules dans un export ouvert par un tableur."""
+    return "'" + value if value[:1] in ("=", "+", "-", "@") else value
 
 
 def _pct(value: float) -> str:
@@ -85,7 +103,7 @@ def _print_profile(profile: DatasetProfile, score: QualityScore) -> None:
             if "vérifier" in decision or "incompatibles" in decision:
                 print(f"      décision : {decision}")
     print(
-        "  Lignes impliquées dans un doublon de ligne complète : "
+        "  Lignes complètes identiques (indicatif ; détail par identifiant : sidadr duplicates) : "
         f"{profile.duplicate_rows} ({profile.duplicate_groups} groupes)"
     )
 
@@ -129,7 +147,9 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def cmd_profile(args: argparse.Namespace) -> int:
+def _load_session(args: argparse.Namespace) -> ImportSession | None:
+    """Importe les fichiers si la correspondance est confirmée ; sinon affiche les
+    propositions et renvoie None."""
     session = ImportSession()
     overrides = _load_overrides(args.mapping)
     inspections = [session.inspect(path, args.sheet) for path in args.files]
@@ -140,7 +160,7 @@ def cmd_profile(args: argparse.Namespace) -> int:
             "\nLa correspondance des colonnes doit être confirmée : relancez avec "
             "--accept-proposed, ou --mapping FICHIER.yaml pour la corriger."
         )
-        return EXIT_NEEDS_CONFIRMATION
+        return None
     for inspection in inspections:
         mapping = inspection.mapping.confirm(session.schema, overrides.get(inspection.source_file))
         table = session.add(inspection, mapping)
@@ -149,16 +169,88 @@ def cmd_profile(args: argparse.Namespace) -> int:
             f"Importé : {report.source_file} -> {report.import_id} "
             f"({report.rows_imported} lignes, {len(report.rows_rejected)} rejetées)"
         )
+    return session
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8"
+    )
+    print(f"\nExport JSON : {path}")
+
+
+def _detect(session: ImportSession) -> DuplicateReport:
+    settings = load_duplicate_settings(schema=session.schema)
+    return detect_duplicates(session.frame, settings, session.schema)
+
+
+def cmd_profile(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
     profile = profile_frame(session.frame, session.schema, session.settings)
-    score = compute_score(profile)
+    duplicates = _detect(session)
+    score = compute_score(profile, duplicate_rows=duplicates.rows_involved(KEY_LEVELS))
     _print_profile(profile, score)
     if args.json:
-        payload = {"profile": dataclasses.asdict(profile), "score": dataclasses.asdict(score)}
-        args.json.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default),
-            encoding="utf-8",
+        _write_json(
+            args.json, {"profile": dataclasses.asdict(profile), "score": dataclasses.asdict(score)}
         )
-        print(f"\nProfil exporté : {args.json}")
+    return EXIT_OK
+
+
+def _print_duplicates(report: DuplicateReport, limit: int) -> None:
+    print(
+        f"\n=== Doublons exacts : {len(report.groups)} groupes sur {report.n_rows} enregistrements"
+    )
+    for kind in DuplicateKind:
+        groups = report.by_kind(kind)
+        severity = _KIND_SEVERITY[kind]
+        rows = report.rows_involved((kind,))
+        print(
+            f"  {_KIND_LABELS[kind]:<34} {len(groups):>5} groupes  {rows:>6} enreg.  [{severity.label}]"
+        )
+    for note in report.notes:
+        print(f"  Note : {note}")
+    ordered = sorted(report.groups, key=lambda g: (g.severity.rank, -g.size, g.group_id))
+    if ordered and limit:
+        print(f"\n  {min(limit, len(ordered))} premiers groupes :")
+    for group in ordered[:limit]:
+        print(f"  [{group.group_id}] {group.explanation()}")
+        print(f"      sources : {', '.join(group.sources)}")
+        for diff in group.differences[:3]:
+            values = " / ".join(f"{v if v is not None else '(vide)'}" for _rid, v in diff.values)
+            print(f"      {diff.field} : {values}")
+    print("\n  Aucun enregistrement n'a été modifié ni supprimé.")
+
+
+def _write_duplicates_csv(path: Path, report: DuplicateReport) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(
+            ["group_id", "kind", "severity", "rule", "key_value", "record_id", "source",
+             "differing_fields", "explanation"]
+        )  # fmt: skip
+        for g in report.groups:
+            diffs = ", ".join(d.field for d in g.differences)
+            for record_id, source in zip(g.record_ids, g.sources, strict=True):
+                writer.writerow(
+                    [g.group_id, g.kind.value, g.severity.value, g.rule, safe_cell(g.key_value),
+                     record_id, source, diffs, g.explanation()]
+                )  # fmt: skip
+    print(f"Export CSV : {path}")
+
+
+def cmd_duplicates(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
+    report = _detect(session)
+    _print_duplicates(report, args.limit)
+    if args.csv:
+        _write_duplicates_csv(args.csv, report)
+    if args.json:
+        _write_json(args.json, {"duplicates": dataclasses.asdict(report)})
     return EXIT_OK
 
 
@@ -185,20 +277,27 @@ def build_parser() -> argparse.ArgumentParser:
     for name, func, text in (
         ("inspect", cmd_inspect, "lire des fichiers et proposer la correspondance des colonnes"),
         ("profile", cmd_profile, "importer des fichiers, profiler la session et calculer le score"),
+        ("duplicates", cmd_duplicates, "détecter les doublons exacts de la session"),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("files", nargs="+", type=Path)
         p.add_argument("--sheet", help="feuille à lire dans les fichiers XLSX")
         p.set_defaults(func=func)
-        if name == "profile":
-            group = p.add_mutually_exclusive_group()
-            group.add_argument(
-                "--accept-proposed", action="store_true", help="confirmer les propositions"
+        if name == "inspect":
+            continue
+        group = p.add_mutually_exclusive_group()
+        group.add_argument(
+            "--accept-proposed", action="store_true", help="confirmer les propositions"
+        )
+        group.add_argument(
+            "--mapping", type=Path, help="corrections YAML {fichier: {colonne: champ}}"
+        )
+        p.add_argument("--json", type=Path, help="exporter le résultat en JSON")
+        if name == "duplicates":
+            p.add_argument(
+                "--csv", type=Path, help="exporter les groupes (une ligne par enregistrement)"
             )
-            group.add_argument(
-                "--mapping", type=Path, help="corrections YAML {fichier: {colonne: champ}}"
-            )
-            p.add_argument("--json", type=Path, help="exporter le profil et le score en JSON")
+            p.add_argument("--limit", type=int, default=10, help="nombre de groupes affichés")
     return parser
 
 
