@@ -1,0 +1,38 @@
+{
+  "base_rows": 20000,
+  "customers": 2690,
+  "defects": {
+    "amount_not_numeric": 20,
+    "atypical_amount": 80,
+    "cross_file_duplicate": 20,
+    "duplicate_key": 60,
+    "exact_duplicate_row": 120,
+    "fee_above_cap": 20,
+    "future_date": 20,
+    "invalid_date": 30,
+    "missing_mandatory": 240,
+    "negative_amount": 40,
+    "unknown_branch": 40,
+    "unknown_currency": 30,
+    "value_date_before_transaction": 40
+  },
+  "fee_cap_xaf": "50000",
+  "files": {
+    "alpha_T2.csv": 8154,
+    "beta_T2.xlsx": 6572,
+    "gamma_T2.csv": 5474
+  },
+  "generator": {
+    "generator_version": "1.0",
+    "sidadr_version": "0.1.0.dev0"
+  },
+  "notice": "Données entièrement synthétiques. Noms : combinaisons aléatoires de prénoms et noms courants ; téléphones : indicatif +999 non attribué ; banques et comptes fictifs.",
+  "period": [
+    "2025-04-01",
+    "2025-06-30"
+  ],
+  "persons": 2540,
+  "reference_date": "2025-06-30",
+  "seed": 42,
+  "total_rows": 20200
+}

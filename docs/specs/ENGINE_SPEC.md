@@ -19,7 +19,7 @@ Champs métier canoniques. Les fichiers importés y sont rattachés via l'étape
 | `customer_id` | texte (local à la banque) | oui | `C-BALP-00412` |
 | `customer_name` | texte | oui | `MANGA Jean Pierre` |
 | `birth_date` | date | non | `1984-03-12` |
-| `phone` | texte | non | `+237 6XX XX XX XX` (format fictif) |
+| `phone` | texte | non | `+999 6XX XX XX XX` (indicatif non attribué) |
 | `account_number` | texte | oui | `BALP-012-0000412-77` (format inventé) |
 | `operation_type` | énumération | oui | `DEPOSIT`, `WITHDRAWAL`, `TRANSFER_IN`, `TRANSFER_OUT`, `FEE` |
 | `transaction_date` | date | oui | `2025-06-18` |
@@ -40,7 +40,9 @@ Le dictionnaire de données complet sera produit en Phase 2 (`docs/data_dictiona
 - **Défauts injectés de façon contrôlée** : doublons exacts, doublons inter-fichiers, variantes de noms (inversion, tiret, initiales, espace manquant, accents, casse), clients réellement présents dans 2 banques, **homonymes réellement distincts** (pour mesurer les faux positifs), valeurs manquantes, montants atypiques, dates impossibles, devises inconnues, montants négatifs incohérents, codes agence inconnus.
 - **Manifeste de vérité terrain** `defects_manifest.csv` : chaque défaut injecté avec son type et ses `record_id`. Il permet de mesurer précision et rappel de chaque détecteur.
 
-**Acceptation** : même graine → fichiers identiques octet par octet ; le manifeste couvre 100 % des défauts injectés ; aucune donnée réelle.
+**Acceptation** : même graine → CSV et JSON identiques octet par octet, XLSX au contenu identique ; le manifeste couvre 100 % des défauts injectés ; aucune donnée réelle (téléphones sur l'indicatif non attribué `+999`).
+
+**Statut : livré en Phase 2** — voir `docs/data_dictionary/DATA_DICTIONARY.md`.
 
 ---
 

@@ -1,0 +1,4 @@
+* text=auto
+# Fichiers de données : conservés tels que générés (fins de ligne CRLF, encodages d'origine).
+data/synthetic/** -text
+*.xlsx binary

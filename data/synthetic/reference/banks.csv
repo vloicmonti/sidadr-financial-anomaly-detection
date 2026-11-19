@@ -1,0 +1,4 @@
+bank_code,bank_name,source_file
+BALP,Banque Alpha,alpha_T2.csv
+BBET,Banque Beta,beta_T2.xlsx
+BGAM,Banque Gamma,gamma_T2.csv
