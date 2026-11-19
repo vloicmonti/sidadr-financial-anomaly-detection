@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 
 from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
+from sidadr.business_rules import RuleReport, RuleSet, evaluate_rules, load_rules
 from sidadr.config import (
     ConfigError,
     load_anomaly_settings,
@@ -206,13 +207,93 @@ def _detect(session: ImportSession) -> DuplicateReport:
     return detect_duplicates(session.frame, settings, session.schema)
 
 
+def _load_ruleset(args: argparse.Namespace, session: ImportSession) -> RuleSet:
+    overrides = {"reference_date": args.reference_date} if args.reference_date else None
+    return load_rules(args.rules, session.schema, overrides)
+
+
+def _print_rules(report: RuleReport, limit: int) -> None:
+    params = ", ".join(f"{k} = {v}" for k, v in report.ruleset.parameters.items())
+    print(
+        f"\n=== Règles métier : {len(report.ruleset.rules)} règles ({report.ruleset.source.name} ; {params})"
+    )
+    print(
+        f"  {'Règle':<22}{'Sévérité':<24}{'Dimension':<14}{'Vérifiées':>10}{'Violations':>11}{'Non éval.':>10}"
+    )
+    for o in report.outcomes:
+        print(
+            f"  {o.rule.rule_id:<22}{o.rule.severity.label:<24}{o.rule.dimension:<14}"
+            f"{o.applicable:>10}{o.violations:>11}{o.not_evaluable:>10}"
+        )
+    print(
+        f"\n  Lignes violant au moins une règle de cohérence : {report.rows_violating('consistency')} sur {report.n_rows}"
+    )
+    for o in report.outcomes:
+        examples = report.for_rule(o.rule.rule_id)[:limit]
+        if not examples:
+            continue
+        print(f"\n  {o.rule.rule_id} — {o.rule.description}")
+        for v in examples:
+            print(f"      {v.record_id:<16} {v.explanation()}")
+    print(
+        "\n  « Non éval. » : valeur absente ou illisible, déjà comptée par la complétude ou la validité."
+    )
+
+
+def _write_rules_csv(path: Path, report: RuleReport) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(
+            [
+                "violation_id",
+                "rule_id",
+                "severity",
+                "dimension",
+                "record_id",
+                "field",
+                "observed",
+                "expected",
+                "explanation",
+                "recommendation",
+            ]
+        )
+        for v in report.violations:
+            row: list[object] = [
+                v.violation_id, v.rule.rule_id, v.rule.severity.value, v.rule.dimension, v.record_id,
+                v.field, v.observed, v.rule.expected(), v.explanation(), v.rule.recommendation,
+            ]  # fmt: skip
+            writer.writerow([safe_cell(str(x)) if x is not None else "" for x in row])
+    print(f"Export CSV : {path}")
+
+
+def cmd_rules(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
+    report = evaluate_rules(session.frame, _load_ruleset(args, session), session.schema)
+    _print_rules(report, args.limit)
+    if args.csv:
+        _write_rules_csv(args.csv, report)
+    if args.json:
+        _write_json(
+            args.json,
+            {"violations": [dataclasses.asdict(v.to_finding()) for v in report.violations]},
+        )
+    return EXIT_OK
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     session = _load_session(args)
     if session is None:
         return EXIT_NEEDS_CONFIRMATION
     profile = profile_frame(session.frame, session.schema, session.settings)
     duplicates = _detect(session)
-    score = compute_score(profile, duplicate_rows=duplicates.rows_involved(KEY_LEVELS))
+    rules = evaluate_rules(session.frame, _load_ruleset(args, session), session.schema)
+    score = compute_score(
+        profile,
+        duplicate_rows=duplicates.rows_involved(KEY_LEVELS),
+        rule_violation_rows=rules.rows_violating("consistency"),
+    )
     _print_profile(profile, score)
     if args.json:
         _write_json(
@@ -531,6 +612,7 @@ def build_parser() -> argparse.ArgumentParser:
             "clients possiblement présents dans plusieurs banques ou agences",
         ),
         ("anomalies", cmd_anomalies, "valeurs statistiquement atypiques par groupe d'opérations"),
+        ("rules", cmd_rules, "évaluer les règles métier"),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("files", nargs="+", type=Path)
@@ -572,6 +654,19 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "anomalies":
             p.add_argument("--csv", type=Path, help="exporter les valeurs atypiques")
             p.add_argument("--limit", type=int, default=10, help="nombre de valeurs affichées")
+        if name in ("profile", "rules"):
+            p.add_argument(
+                "--rules",
+                type=Path,
+                help="fichier de règles YAML (défaut : config/rules/transactions.yaml)",
+            )
+            p.add_argument(
+                "--reference-date",
+                help="date d'arrêté du contrôle, AAAA-MM-JJ (remplace celle du fichier)",
+            )
+        if name == "rules":
+            p.add_argument("--csv", type=Path, help="exporter les violations")
+            p.add_argument("--limit", type=int, default=3, help="exemples affichés par règle")
     return parser
 
 

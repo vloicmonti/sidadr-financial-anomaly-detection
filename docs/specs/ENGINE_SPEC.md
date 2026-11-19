@@ -180,6 +180,27 @@ Règles livrées : montant négatif interdit selon le type, date future, code ag
 
 **Acceptation** : chaque règle a un test positif et négatif ; un YAML invalide est rejeté au démarrage avec un message précis.
 
+**Statut : livré en Phase 8.** Fichier [`config/rules/transactions.yaml`](../../config/rules/transactions.yaml), commande `sidadr rules`.
+
+| Règle | Sévérité | Dimension | Violations trouvées / injectées |
+|---|---|---|---:|
+| `R-MANDATORY` champs obligatoires | Erreur certaine | complétude | 240 / 240 |
+| `R-CURRENCY-ISO` devise du référentiel | Erreur certaine | cohérence | 30 / 30 |
+| `R-DATE-FUTURE` date ≤ date d'arrêté | Erreur certaine | cohérence | 20 / 20 |
+| `R-AMOUNT-NEG-DEPOSIT` dépôt ≥ 0 | Incohérence probable | cohérence | 40 / 40 |
+| `R-FEE-CAP` frais ≤ 50 000 XAF | Incohérence probable | cohérence | 20 / 20 |
+| `R-VALUE-DATE` date de valeur ≥ date d'opération | Incohérence probable | cohérence | 40 / 40 |
+| `R-BRANCH-REF` agence du référentiel | Incohérence probable | cohérence | 40 / 40 |
+
+Chaque règle retrouve **exactement** les enregistrements injectés, sans aucun en trop. La dimension « cohérence » du score qualité est désormais évaluée (190 lignes sur 20 200 violent au moins une règle de cohérence) ; le score n'a plus de poids redistribué.
+
+Choix :
+- Les règles sont **typées** : une comparaison de dates compare des dates (format de chaque fichier respecté), une comparaison de montants compare des nombres. Une valeur absente ou illisible est comptée « non évaluable » au lieu d'être jugée ; elle est déjà mesurée par la complétude ou la validité.
+- Une règle porte sa **dimension** : la règle des champs obligatoires relève de la complétude et n'est donc pas comptée une seconde fois dans la cohérence.
+- Les paramètres (`$reference_date`, `$fee_cap_xaf`) et les référentiels (CSV) sont déclarés dans le fichier ; la date d'arrêté peut être remplacée en ligne de commande (`--reference-date`).
+- Validation complète au chargement : champ, opérateur, sévérité, type de valeur, paramètre, référentiel, expression régulière, identifiant en double. Aucune expression n'est jamais exécutée comme du code.
+- Les **bornes métier** prévues au module F (Phase 7) sont exprimées ici (`R-FEE-CAP`).
+
 ## Module H — Correction et journal d'audit (Phase 9)
 
 Actions : modifier une cellule, exclure un enregistrement, confirmer / rejeter un constat, conserver les deux, annuler une correction. **Motif obligatoire.** Données originales intactes (voir `ARCHITECTURE.md` § 4.4). Toute action écrite dans `audit_log`.

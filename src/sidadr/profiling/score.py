@@ -38,7 +38,7 @@ class QualityScore:
 
 
 def _measure(
-    name: str, profile: DatasetProfile, duplicate_rows: int | None
+    name: str, profile: DatasetProfile, duplicate_rows: int | None, rule_violation_rows: int | None
 ) -> tuple[float | None, int, int, str]:
     if name == "completeness":
         required = [c for c in profile.columns if c.required]
@@ -66,7 +66,16 @@ def _measure(
         total = sum(c.filled for c in checked)
         return (1 - bad / total if total else 1.0), bad, total, ""
     if name == "consistency":
-        return None, 0, 0, "Règles métier pas encore disponibles (Phase 8)."
+        if rule_violation_rows is None:
+            return None, 0, 0, "Règles métier non évaluées."
+        total = profile.n_rows
+        bad = rule_violation_rows
+        return (
+            (1 - bad / total if total else 1.0),
+            bad,
+            total,
+            "lignes violant au moins une règle de cohérence",
+        )
     return None, 0, 0, f"Dimension « {name} » inconnue du moteur."
 
 
@@ -75,11 +84,15 @@ def compute_score(
     dimensions: tuple[Dimension, ...] | None = None,
     *,
     duplicate_rows: int | None = None,
+    rule_violation_rows: int | None = None,
 ) -> QualityScore:
     """Calcule le score. `duplicate_rows` (issu du module de doublons) remplace la mesure
-    approximative d'unicité du profil lorsqu'il est fourni."""
+    approximative d'unicité du profil lorsqu'il est fourni ; `rule_violation_rows` (issu du
+    moteur de règles) permet d'évaluer la cohérence."""
     dimensions = dimensions or load_quality_dimensions()
-    measured = [(d, *_measure(d.name, profile, duplicate_rows)) for d in dimensions]
+    measured = [
+        (d, *_measure(d.name, profile, duplicate_rows, rule_violation_rows)) for d in dimensions
+    ]
     evaluated_weight = sum(d.weight for d, value, *_ in measured if value is not None)
 
     results = []

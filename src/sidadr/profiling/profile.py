@@ -242,3 +242,32 @@ def profile_frame(
         duplicate_rows=int(duplicated.sum()),
         duplicate_groups=int(groups),
     )
+
+
+def typed_frame(frame: pd.DataFrame, schema: Schema) -> pd.DataFrame:
+    """Valeurs converties dans leur type : `date`, `Decimal` ou texte sans espaces de bord.
+
+    Une valeur absente ou illisible devient None. Les conventions (ordre des dates,
+    séparateur décimal) sont décidées fichier par fichier, comme dans le profil.
+    """
+    out = pd.DataFrame(index=frame.index, columns=list(schema.names), dtype=object)
+    for _import_id, group in frame.groupby("import_id", sort=False):
+        for spec in schema.fields:
+            raw = group[spec.name].tolist()
+            present = [str(v) for v in raw if not _is_missing(v)]
+            converted: list[object]
+            if spec.type == "date":
+                order = infer_date_order(present).order
+                converted = []
+                for v in raw:
+                    status, parsed = parse_date(None if _is_missing(v) else str(v), order)
+                    converted.append(parsed if status is DateStatus.VALID else None)
+            elif spec.type == "decimal":
+                separator, _note = infer_decimal_separator(present)
+                converted = [
+                    None if _is_missing(v) else parse_decimal(str(v), separator) for v in raw
+                ]
+            else:
+                converted = [None if _is_missing(v) else str(v).strip() for v in raw]
+            out.loc[group.index, spec.name] = pd.Series(converted, index=group.index, dtype=object)
+    return out

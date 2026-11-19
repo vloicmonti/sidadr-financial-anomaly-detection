@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from sidadr.anomaly_detection import detect_anomalies
+from sidadr.business_rules import RuleReport, evaluate_rules, load_rules
 from sidadr.cli import main
 from sidadr.config import (
     CrossEntitySettings,
@@ -27,7 +28,7 @@ from sidadr.evaluation.names import (
 from sidadr.ingestion import ImportSession
 from sidadr.ingestion.importer import _slug
 from sidadr.name_matching import MatchReport, match_names
-from sidadr.profiling import DatasetProfile, profile_frame
+from sidadr.profiling import DatasetProfile, compute_score, profile_frame
 
 DATA = Path(__file__).resolve().parents[2] / "data" / "synthetic"
 FILES = ("alpha_T2.csv", "beta_T2.xlsx", "gamma_T2.csv")
@@ -313,3 +314,69 @@ def test_cli_anomalies_command(tmp_path: Path) -> None:
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[0].startswith("anomaly_id;record_id;field")
     assert len(lines) > 100
+
+
+# ---------------------------------------------------------------- règles métier (Phase 8)
+
+RULE_DEFECTS = {
+    "R-MANDATORY": "missing_mandatory",
+    "R-CURRENCY-ISO": "unknown_currency",
+    "R-DATE-FUTURE": "future_date",
+    "R-AMOUNT-NEG-DEPOSIT": "negative_amount",
+    "R-FEE-CAP": "fee_above_cap",
+    "R-VALUE-DATE": "value_date_before_transaction",
+    "R-BRANCH-REF": "unknown_branch",
+}
+
+
+@pytest.fixture(scope="module")
+def rule_report(session: ImportSession) -> RuleReport:
+    return evaluate_rules(session.frame, load_rules(schema=session.schema), session.schema)
+
+
+@pytest.mark.parametrize(("rule_id", "defect_type"), sorted(RULE_DEFECTS.items()))
+def test_each_rule_finds_exactly_its_injected_defects(
+    rule_report: RuleReport, rule_id: str, defect_type: str
+) -> None:
+    defects = load_defects(DATA / "_truth" / "defects_manifest.csv")
+    assert {v.record_id for v in rule_report.for_rule(rule_id)} == defects[defect_type]
+
+
+def test_consistency_dimension_is_now_evaluated(
+    session: ImportSession, rule_report: RuleReport
+) -> None:
+    profile = profile_frame(session.frame, session.schema, session.settings)
+    score = compute_score(profile, rule_violation_rows=rule_report.rows_violating("consistency"))
+    assert score["consistency"].evaluated
+    assert score["consistency"].numerator == rule_report.rows_violating("consistency") == 190
+    assert all(d.evaluated for d in score.dimensions)
+
+
+def test_cli_rules_command(tmp_path: Path) -> None:
+    files = [str(DATA / name) for name in FILES]
+    assert main(["rules", *files]) == 2
+    out = tmp_path / "rules.csv"
+    assert main(["rules", *files, "--accept-proposed", "--csv", str(out), "--limit", "0"]) == 0
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("violation_id;rule_id;severity")
+    assert len(lines) == 1 + 430
+    later = tmp_path / "later.csv"
+    assert (
+        main(
+            [
+                "rules",
+                *files,
+                "--accept-proposed",
+                "--reference-date",
+                "2027-01-01",
+                "--csv",
+                str(later),
+                "--limit",
+                "0",
+            ]
+        )
+        == 0
+    )
+    assert not any(
+        ";R-DATE-FUTURE;" in line for line in later.read_text(encoding="utf-8-sig").splitlines()
+    )

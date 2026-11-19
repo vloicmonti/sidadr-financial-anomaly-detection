@@ -1,0 +1,71 @@
+# Règles métier des opérations bancaires (Phase 8).
+# Les règles sont déclaratives : aucune expression n'est exécutée comme du code.
+#
+# check :
+#   op     : "<", "<=", ">", ">=", "==", "!=", in, not_in, not_null, regex
+#   value  : valeur fixe, ou $paramètre (voir « parameters »)
+#   other_field : comparer à un autre champ de la même ligne
+#   values / reference : liste autorisée (in / not_in), en clair ou depuis un référentiel
+# when : la règle ne s'applique qu'aux lignes dont les champs ont ces valeurs.
+# dimension : dimension du score qualité concernée (consistency par défaut). Les champs
+#   obligatoires relèvent de la complétude : ils ne sont pas comptés deux fois.
+# Une valeur absente ou illisible n'est pas jugée par une règle de comparaison :
+#   elle est comptée « non évaluable » (la complétude et la validité s'en chargent).
+
+parameters:
+  reference_date: 2025-06-30     # date d'arrêté du contrôle
+  fee_cap_xaf: 50000
+
+references:
+  branches:
+    file: ../../data/synthetic/reference/branches.csv
+    column: branch_code
+  currencies:
+    file: ../../data/synthetic/reference/currencies.csv
+    column: currency
+
+rules:
+  - id: R-MANDATORY
+    description: "Les champs obligatoires doivent être renseignés"
+    check: {fields: [transaction_id, bank_code, branch_code, customer_id, customer_name, account_number, operation_type, transaction_date, amount, currency], op: not_null}
+    severity: certain_error
+    dimension: completeness
+    recommendation: "Compléter la valeur depuis le système source ; ne pas l'inventer."
+
+  - id: R-CURRENCY-ISO
+    description: "La devise doit appartenir au référentiel"
+    check: {field: currency, op: in, reference: currencies}
+    severity: certain_error
+    recommendation: "Remplacer par le code ISO 4217 correspondant (ex. « FCFA » ou « CFA » -> XAF) après vérification."
+
+  - id: R-DATE-FUTURE
+    description: "Une opération ne peut pas être datée après la date d'arrêté"
+    check: {field: transaction_date, op: "<=", value: $reference_date}
+    severity: certain_error
+    recommendation: "Vérifier la date saisie dans le système source (inversion jour/mois, année erronée)."
+
+  - id: R-AMOUNT-NEG-DEPOSIT
+    description: "Un dépôt ne peut pas avoir un montant négatif"
+    when: {operation_type: [DEPOSIT]}
+    check: {field: amount, op: ">=", value: 0}
+    severity: probable_inconsistency
+    recommendation: "Vérifier le sens de l'opération ; un montant négatif peut signaler une annulation mal codée."
+
+  - id: R-FEE-CAP
+    description: "Des frais ne doivent pas dépasser le plafond de 50 000 XAF"
+    when: {operation_type: [FEE], currency: [XAF]}
+    check: {field: amount, op: "<=", value: $fee_cap_xaf}
+    severity: probable_inconsistency
+    recommendation: "Vérifier le type d'opération : un montant de cette taille correspond rarement à des frais."
+
+  - id: R-VALUE-DATE
+    description: "La date de valeur ne peut pas précéder la date d'opération"
+    check: {field: value_date, op: ">=", other_field: transaction_date}
+    severity: probable_inconsistency
+    recommendation: "Vérifier les deux dates dans le système source."
+
+  - id: R-BRANCH-REF
+    description: "Le code agence doit exister dans le référentiel des agences"
+    check: {field: branch_code, op: in, reference: branches}
+    severity: probable_inconsistency
+    recommendation: "Vérifier si l'agence est nouvelle (référentiel à mettre à jour) ou si le code est mal saisi."

@@ -11,7 +11,7 @@ dimensions:
   uniqueness:
     weight: 0.20
     label: Unicité
-    definition: 1 - part des lignes impliquées dans un doublon de ligne complète
+    definition: 1 - part des lignes impliquées dans un doublon d'identifiant (même fichier ou inter-fichiers)
   validity:
     weight: 0.30
     label: Validité
@@ -19,4 +19,4 @@ dimensions:
   consistency:
     weight: 0.20
     label: Cohérence
-    definition: 1 - part des lignes violant au moins une règle métier (disponible en Phase 8)
+    definition: 1 - part des lignes violant au moins une règle métier de cohérence
