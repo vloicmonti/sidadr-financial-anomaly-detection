@@ -1,0 +1,11 @@
+# Clients potentiellement présents dans plusieurs banques ou agences (Phase 6).
+# Les groupes sont construits à partir des correspondances de noms (Phase 5).
+# La présence d'un même nom dans plusieurs banques ne prouve pas une identité commune.
+
+# Catégorie minimale des correspondances utilisées pour relier deux fiches.
+# « intermediate » ne perd aucune vraie paire sur le jeu de référence ;
+# « high » ne garde que les correspondances corroborées.
+min_category: intermediate
+
+# Inclure les clients présents dans plusieurs agences d'une même banque.
+include_multi_branch: true

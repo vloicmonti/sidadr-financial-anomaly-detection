@@ -121,6 +121,17 @@ Regroupe les correspondances du module D (et les identifiants exacts éventuels)
 
 **Acceptation** : les clients injectés comme multi-banques sont retrouvés ; un groupe n'est jamais présenté comme « même personne » sans validation.
 
+**Statut : livré en Phase 6.** Écart volontaire : le regroupement transitif (composantes connexes) n'utilise **que les correspondances élevées**, c'est-à-dire corroborées. Une première version regroupait aussi les correspondances intermédiaires : des homonymes sans champ corroborant s'enchaînaient alors en groupes de 14 fiches, inexploitables. Les correspondances intermédiaires restent donc des **paires isolées**.
+
+Mesuré sur le jeu de référence (100 personnes réellement clientes de deux banques) :
+
+| Correspondances utilisées | Personnes retrouvées | Pureté des groupes multi-banques |
+|---|---:|---:|
+| Élevées seulement (`min_category: high`) | 85 % | **100 %** |
+| Élevées et intermédiaires (défaut) | **100 %** | 63 % |
+
+La pureté est la part des groupes dont toutes les fiches désignent réellement la même personne. Le réglage par défaut privilégie le rappel : aucun client multi-banques n'est oublié, au prix de paires d'homonymes à examiner, toujours signalées comme « similarité intermédiaire ». Chaque groupe affiche la concordance de la date de naissance et du téléphone (concordant, concordant là où renseigné, divergent, non renseigné) et son taux de liens directs. L'agence d'une fiche est l'agence la plus fréquente de ses opérations, faute d'agence de rattachement dans les données.
+
 ## Module F — Anomalies statistiques (Phase 7)
 
 - **z-score robuste** : `0,6745 × (x − médiane) / MAD`, seuil par défaut 3,5 (Iglewicz & Hoaglin).

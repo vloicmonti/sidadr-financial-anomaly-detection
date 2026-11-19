@@ -287,3 +287,20 @@ def load_matching_settings(directory: Path | None = None) -> MatchingSettings:
     if settings.max_block_size < 2 or settings.phone_significant_digits < 4:
         raise ConfigError("matching.yaml : max_block_size >= 2 et phone_significant_digits >= 4.")
     return settings
+
+
+# --------------------------------------------------------------------------- multi-entités
+
+
+@dataclass(frozen=True)
+class CrossEntitySettings:
+    min_category: str = "intermediate"
+    include_multi_branch: bool = True
+
+
+def load_cross_entity_settings(directory: Path | None = None) -> CrossEntitySettings:
+    raw = _load("cross_entity.yaml", directory)
+    min_category = str(raw.get("min_category", "intermediate"))
+    if min_category not in ("high", "intermediate", "low"):
+        raise ConfigError("cross_entity.yaml : min_category doit valoir high, intermediate ou low.")
+    return CrossEntitySettings(min_category, bool(raw.get("include_multi_branch", True)))

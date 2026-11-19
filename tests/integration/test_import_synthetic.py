@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 
 from sidadr.cli import main
-from sidadr.config import load_duplicate_settings, load_matching_settings
+from sidadr.config import CrossEntitySettings, load_duplicate_settings, load_matching_settings
+from sidadr.cross_entity import group_entities
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
+from sidadr.evaluation.entities import evaluate_entities
 from sidadr.evaluation.names import (
     NameEvaluation,
     evaluate_names,
@@ -17,7 +19,7 @@ from sidadr.evaluation.names import (
 )
 from sidadr.ingestion import ImportSession
 from sidadr.ingestion.importer import _slug
-from sidadr.name_matching import match_names
+from sidadr.name_matching import MatchReport, match_names
 from sidadr.profiling import DatasetProfile, profile_frame
 
 DATA = Path(__file__).resolve().parents[2] / "data" / "synthetic"
@@ -229,3 +231,51 @@ def test_cli_names_command(tmp_path: Path) -> None:
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[0].startswith("match_id;category;final_score")
     assert all(";high;" in line for line in lines[1:])
+
+
+# ---------------------------------------------------------------- multi-banques (Phase 6)
+
+
+@pytest.fixture(scope="module")
+def name_report(session: ImportSession) -> MatchReport:
+    return match_names(session.frame, load_matching_settings(), session.schema)
+
+
+@pytest.mark.parametrize(
+    ("min_category", "min_recall", "min_purity"), [("high", 0.85, 1.0), ("intermediate", 1.0, 0.6)]
+)
+def test_multi_bank_customers_are_found(
+    name_report: MatchReport, min_category: str, min_recall: float, min_purity: float
+) -> None:
+    report = group_entities(name_report, CrossEntitySettings(min_category, True))
+    truth = load_customer_truth(DATA / "_truth" / "customers.csv")
+    evaluation = evaluate_entities(report, name_report.profiles, truth)
+    assert evaluation.true_multi_bank_persons == 100
+    assert evaluation.recall >= min_recall
+    assert evaluation.purity >= min_purity
+    assert max(len(g.members) for g in report.groups) <= 3  # pas d'enchaînement d'homonymes
+
+
+def test_cli_entities_command(tmp_path: Path) -> None:
+    files = [str(DATA / name) for name in FILES]
+    assert main(["entities", *files]) == 2
+    out = tmp_path / "entities.csv"
+    assert (
+        main(
+            [
+                "entities",
+                *files,
+                "--accept-proposed",
+                "--scope",
+                "multi_bank",
+                "--csv",
+                str(out),
+                "--limit",
+                "0",
+            ]
+        )
+        == 0
+    )
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("group_id;scope;confidence")
+    assert all(";multi_bank;" in line for line in lines[1:])

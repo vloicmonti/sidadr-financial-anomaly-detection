@@ -22,7 +22,19 @@ from typing import Any
 
 import yaml
 
-from sidadr.config import ConfigError, load_duplicate_settings, load_matching_settings
+from sidadr.config import (
+    ConfigError,
+    load_cross_entity_settings,
+    load_duplicate_settings,
+    load_matching_settings,
+)
+from sidadr.cross_entity import (
+    EntityGroup,
+    EntityReport,
+    EntityScope,
+    FieldAgreement,
+    group_entities,
+)
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
 from sidadr.deduplication.detector import _SEVERITY as _KIND_SEVERITY
 from sidadr.ingestion import ImportRejected, ImportSession, Inspection, MappingError
@@ -355,6 +367,70 @@ def cmd_names(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+_AGREEMENT_LABELS = {
+    FieldAgreement.CONCORDANT: "concordant",
+    FieldAgreement.PARTIAL: "concordant là où renseigné",
+    FieldAgreement.DISCORDANT: "DIVERGENT",
+    FieldAgreement.UNKNOWN: "non renseigné",
+}
+
+
+def _print_entities(report: EntityReport, groups: list[EntityGroup], limit: int) -> None:
+    print(
+        f"\n=== Clients multi-entités : {len(report.groups)} groupes (correspondances >= {report.settings.min_category})"
+    )
+    for scope in EntityScope:
+        scoped = report.by_scope(scope)
+        by_conf = {c.label: sum(1 for g in scoped if g.confidence is c) for c in Category}
+        detail = ", ".join(f"{n} {label.lower()}" for label, n in by_conf.items() if n)
+        print(f"  {scope.label:<32} {len(scoped):>5} groupes  ({detail or 'aucun'})")
+    print(f"\n  Attention : {WARNING}")
+    for group in groups[:limit]:
+        print(f"\n  [{group.group_id}] {group.scope.label} — {group.confidence.label}")
+        for m in group.members:
+            print(
+                f"      {m.label:<26} {m.bank_code or '?'}/{m.branch_code or '?':<10} {m.name:<28} "
+                f"né(e) {m.birth_date or '?':<10} tél. {m.phone or '?':<10} {len(m.record_ids)} op."
+            )
+        for comparison in group.fields:
+            print(f"      {comparison.field:<12} {_AGREEMENT_LABELS[comparison.agreement]}")
+        print(f"      {group.explanation()}")
+
+
+def _write_entities_csv(path: Path, groups: list[EntityGroup]) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(
+            ["group_id", "scope", "confidence", "direct_link_ratio", "import_id", "customer_id",
+             "bank_code", "branch_code", "name", "birth_date", "phone", "operations", "explanation"]
+        )  # fmt: skip
+        for g in groups:
+            for m in g.members:
+                row: list[object] = [
+                    g.group_id, g.scope.value, g.confidence.value, round(g.direct_link_ratio, 2),
+                    m.import_id, m.customer_id, m.bank_code, m.branch_code, m.name, m.birth_date,
+                    m.phone, len(m.record_ids), g.explanation(),
+                ]  # fmt: skip
+                writer.writerow([safe_cell(str(v)) if v is not None else "" for v in row])
+    print(f"Export CSV : {path}")
+
+
+def cmd_entities(args: argparse.Namespace) -> int:
+    session = _load_session(args)
+    if session is None:
+        return EXIT_NEEDS_CONFIRMATION
+    matches = match_names(session.frame, load_matching_settings(), session.schema)
+    report = group_entities(matches, load_cross_entity_settings())
+    groups = report.groups if args.scope == "all" else report.by_scope(EntityScope(args.scope))
+    _print_entities(report, groups, args.limit)
+    if args.csv:
+        _write_entities_csv(args.csv, groups)
+    if args.json:
+        _write_json(args.json, {"entity_groups": [dataclasses.asdict(g) for g in groups]})
+    print("\n  Aucune fiche n'a été fusionnée ni modifiée.")
+    return EXIT_OK
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     from sidadr.synthetic.cli import main as generate_main
 
@@ -380,6 +456,11 @@ def build_parser() -> argparse.ArgumentParser:
         ("profile", cmd_profile, "importer des fichiers, profiler la session et calculer le score"),
         ("duplicates", cmd_duplicates, "détecter les doublons exacts de la session"),
         ("names", cmd_names, "rapprocher les noms de clients similaires"),
+        (
+            "entities",
+            cmd_entities,
+            "clients possiblement présents dans plusieurs banques ou agences",
+        ),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("files", nargs="+", type=Path)
@@ -409,6 +490,15 @@ def build_parser() -> argparse.ArgumentParser:
             )
             p.add_argument("--csv", type=Path, help="exporter les paires (une ligne par paire)")
             p.add_argument("--limit", type=int, default=5, help="nombre de paires affichées")
+        if name == "entities":
+            p.add_argument(
+                "--scope",
+                choices=["all", *[s.value for s in EntityScope]],
+                default="all",
+                help="type de groupes affichés et exportés",
+            )
+            p.add_argument("--csv", type=Path, help="exporter les groupes (une ligne par fiche)")
+            p.add_argument("--limit", type=int, default=5, help="nombre de groupes affichés")
     return parser
 
 
