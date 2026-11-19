@@ -253,6 +253,23 @@ def cmd_report(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from sidadr.api import create_app
+
+    if args.host not in ("127.0.0.1", "localhost"):
+        print(
+            "Attention : l'API n'a pas d'authentification. Ne l'exposez pas sur un réseau partagé."
+        )
+    root = args.workspace or default_workspace()
+    print(
+        f"API SIDADR sur http://{args.host}:{args.port}/api  (documentation : /api/docs, espace : {root})"
+    )
+    uvicorn.run(create_app(root), host=args.host, port=args.port, log_level="warning")
+    return EXIT_OK
+
+
 def _shown(value: str | None) -> str:
     return "(vide)" if value is None else value
 
@@ -337,6 +354,11 @@ def register(
     )
     p.add_argument("--examples", type=int, default=10, help="exemples de constats par sévérité")
     p.set_defaults(func=cmd_report)
+
+    p = session_parser("serve", "démarrer l'API locale utilisée par l'interface web")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=cmd_serve)
 
     p = session_parser("history", "consulter le journal d'audit")
     p.add_argument("session")

@@ -161,6 +161,26 @@ PostgreSQL n'est **pas** retenu : un seul utilisateur local, aucun accès concur
 
 ## 7. API et frontend (Phase 11)
 
+**Phase 11a livrée : API FastAPI** (`src/sidadr/api/app.py`, commande `sidadr serve`, documentation interactive sur `/api/docs`). L'API n'ajoute aucune logique métier : elle appelle le moteur.
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/health`, `/api/schema` | état, schéma canonique |
+| POST | `/api/imports` | téléversement et inspection (formats, aperçu, correspondance proposée) |
+| POST | `/api/sessions` | création de session (vaut confirmation de la correspondance) |
+| GET | `/api/sessions`, `/api/sessions/{id}` | liste, état (compteurs, analyse, fraîcheur, intégrité du journal) |
+| POST | `/api/sessions/{id}/analyze` | analyse complète de la vue de travail |
+| GET | `/api/sessions/{id}/findings` | constats filtrés, recherche, pagination, facettes |
+| GET | `/api/sessions/{id}/findings/{fid}` | détail et enregistrements concernés |
+| POST | `/api/sessions/{id}/findings/{fid}/decision` | décision motivée |
+| GET | `/api/sessions/{id}/records`, `/records/{rid}` | données de travail ; original, valeur actuelle et historique d'un enregistrement |
+| POST | `/api/sessions/{id}/corrections`, `/exclusions`, `/undo` | actions motivées et réversibles |
+| GET | `/api/sessions/{id}/history` | journal et vérification d'intégrité |
+| GET | `/api/sessions/{id}/export`, `/report` | XLSX, CSV (zip), rapport HTML |
+
+Sécurité : écoute sur 127.0.0.1 par défaut, CORS limité à l'origine du frontend de développement, noms de fichiers téléversés assainis, taille limitée, erreurs renvoyées en messages lisibles (422, 404, 409) sans trace technique, en-tête `Content-Security-Policy` strict sur le rapport. L'auteur des actions est transmis par l'en-tête `X-Sidadr-Actor` (déclaratif, sans authentification).
+
+
 - **FastAPI** : routes `/imports`, `/datasets/{id}/profile`, `/findings`, `/findings/{id}/decision`, `/corrections`, `/audit`, `/exports`. Schémas Pydantic partagés avec le moteur. Documentation OpenAPI générée automatiquement.
 - **Frontend** : Vite, React, TypeScript strict, Tailwind CSS, composants shadcn/ui (Radix), TanStack Table (tri, filtres, pagination, virtualisation des grands tableaux), TanStack Query (appels API, états de chargement/erreur), Recharts, icônes Lucide. Types TypeScript générés depuis le schéma OpenAPI pour éviter la dérive entre back et front.
 
