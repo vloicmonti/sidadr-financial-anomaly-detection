@@ -264,7 +264,10 @@ def write_dataset(dataset: GeneratedDataset, out: Path) -> dict[str, object]:
             "courants ; téléphones : indicatif +999 non attribué ; banques et comptes fictifs."
         ),
     }
+    # newline="\n" : mêmes octets sous Windows et Linux (le jeu versionné est vérifié en CI).
     (out / "metadata.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     return metadata
