@@ -7,11 +7,19 @@ import type { AnalysisSummary, SessionState, Severity } from "../api/types";
 import { Button, Card, CardHeader, EmptyState, ErrorState, SEVERITIES, SeverityBadge, Skeleton } from "../components/ui";
 import { cn, formatDateTime, formatNumber, formatPercent } from "../lib";
 
-const SEVERITY_HELP: Record<Severity, string> = {
-  certain_error: "Formats invalides, dates impossibles, identifiants en double",
-  probable_inconsistency: "Règles métier non respectées, doublons inter-fichiers",
-  atypical_value: "Écarts statistiques à vérifier — pas des erreurs",
-  review_alert: "Correspondances de noms et clients multi-banques à valider",
+const SEVERITY_HELP: Record<"banking" | "generic", Record<Severity, string>> = {
+  banking: {
+    certain_error: "Formats invalides, dates impossibles, identifiants en double",
+    probable_inconsistency: "Règles métier non respectées, doublons inter-fichiers",
+    atypical_value: "Écarts statistiques à vérifier — pas des erreurs",
+    review_alert: "Correspondances de noms et clients multi-banques à valider",
+  },
+  generic: {
+    certain_error: "Champs obligatoires vides, lignes ou identifiants en double",
+    probable_inconsistency: "Règles personnalisées non respectées",
+    atypical_value: "Valeurs numériques inhabituelles — pas des erreurs",
+    review_alert: "Constats demandant un jugement humain",
+  },
 };
 
 function ScoreRing({ score }: { score: number }) {
@@ -78,7 +86,7 @@ function ScoreCard({ analysis }: { analysis: AnalysisSummary }) {
   );
 }
 
-function FindingsCard({ analysis }: { analysis: AnalysisSummary }) {
+function FindingsCard({ analysis, mode }: { analysis: AnalysisSummary; mode: "banking" | "generic" }) {
   const bySeverity = analysis.findings.by_severity;
   return (
     <Card>
@@ -90,7 +98,7 @@ function FindingsCard({ analysis }: { analysis: AnalysisSummary }) {
               {formatNumber(bySeverity[severity] ?? 0)}
             </span>
             <SeverityBadge severity={severity} />
-            <span className="col-span-2 text-xs leading-snug text-ink-3">{SEVERITY_HELP[severity]}</span>
+            <span className="col-span-2 text-xs leading-snug text-ink-3">{SEVERITY_HELP[mode][severity]}</span>
           </div>
         ))}
       </div>
@@ -213,7 +221,7 @@ export function OverviewPage() {
       {data.analysis ? (
         <div className="grid grid-cols-[minmax(380px,1fr)_minmax(0,1.25fr)] gap-5">
           <ScoreCard analysis={data.analysis} />
-          <FindingsCard analysis={data.analysis} />
+          <FindingsCard analysis={data.analysis} mode={data.mode ?? "banking"} />
         </div>
       ) : (
         <Card>

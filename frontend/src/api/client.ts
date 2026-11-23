@@ -1,4 +1,4 @@
-import type { AnalysisSummary, Health, SessionState, SessionSummary } from "./types";
+import type { AnalysisSummary, Health, SchemaField, SessionCreate, SessionState, SessionSummary, UploadResult } from "./types";
 
 /** Erreur renvoyée par l'API, avec le message lisible prévu pour l'utilisateur. */
 export class ApiError extends Error {
@@ -37,7 +37,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`/api${path}`, {
       ...init,
-      headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
+      // FormData : le navigateur fixe lui-même le Content-Type (avec la frontière multipart).
+      headers: { Accept: "application/json", ...(typeof init?.body === "string" ? { "Content-Type": "application/json" } : {}), ...init?.headers },
     });
   } catch {
     throw new ApiError(0, NETWORK_MESSAGE, "network");
@@ -52,4 +53,12 @@ export const api = {
   session: (id: string) => request<SessionState>(`/sessions/${encodeURIComponent(id)}`),
   analyze: (id: string) =>
     request<AnalysisSummary>(`/sessions/${encodeURIComponent(id)}/analyze`, { method: "POST" }),
+  schema: () => request<SchemaField[]>("/schema"),
+  upload: (files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file, file.name);
+    return request<UploadResult>("/imports", { method: "POST", body: form });
+  },
+  createSession: (payload: SessionCreate) =>
+    request<SessionState>("/sessions", { method: "POST", body: JSON.stringify(payload) }),
 };

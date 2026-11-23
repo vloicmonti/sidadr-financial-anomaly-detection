@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, FolderOpen } from "lucide-react";
+import { ChevronRight, FolderOpen, Upload } from "lucide-react";
 import { Link } from "react-router";
 
 import { api } from "../api/client";
@@ -11,11 +11,20 @@ export function SessionsPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Sessions</h1>
-        <p className="mt-1.5 text-ink-2">
-          Chaque session regroupe des fichiers importés, leur analyse, les décisions et le journal d'audit.
-        </p>
+      <div className="mb-6 flex items-end gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Sessions</h1>
+          <p className="mt-1.5 text-ink-2">
+            Chaque session regroupe des fichiers importés, leur analyse, les décisions et le journal d'audit.
+          </p>
+        </div>
+        <Link
+          to="/import"
+          className="ml-auto inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 font-medium whitespace-nowrap text-white hover:bg-primary-hover"
+        >
+          <Upload aria-hidden className="size-4" />
+          Nouvel import
+        </Link>
       </div>
 
       {sessions.isError ? <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} /> : null}
@@ -29,11 +38,8 @@ export function SessionsPage() {
           </div>
         ) : sessions.data && sessions.data.length === 0 ? (
           <EmptyState icon={FolderOpen} title="Aucune session pour l'instant">
-            Créez une session en ligne de commande :{" "}
-            <code className="rounded bg-subtle px-1.5 py-0.5 font-mono text-xs">
-              sidadr session-create FICHIERS --accept-proposed
-            </code>
-            . L'import depuis l'interface arrive avec les prochains écrans.
+            Importez un ou plusieurs fichiers CSV ou Excel — opérations bancaires ou n'importe quel tableau — pour
+            créer votre première session.
           </EmptyState>
         ) : sessions.data ? (
           <table className="w-full border-collapse">

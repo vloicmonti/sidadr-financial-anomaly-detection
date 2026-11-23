@@ -120,7 +120,7 @@ npm ci
 npm run dev
 ```
 
-Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles : liste des sessions et vue d'ensemble (lancement de l'analyse, score, constats par sévérité, état de la revue). Les autres écrans arrivent au fil de la phase 11.
+Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles : liste des sessions, **import** (glisser-déposer, aperçu, mode suggéré, configuration du mode générique ou correspondance bancaire) et vue d'ensemble (analyse, score, constats par sévérité, état de la revue). Les autres écrans arrivent au fil de la phase 11.
 
 ## Architecture
 

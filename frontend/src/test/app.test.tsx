@@ -99,11 +99,12 @@ describe("page Sessions", () => {
     expect(await screen.findByText("Aucune session pour l'instant")).toBeInTheDocument();
   });
 
-  it("affiche une erreur lisible quand le moteur est injoignable", async () => {
+  it("affiche une erreur lisible quand le moteur est injoignable", { timeout: 10_000 }, async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     renderAt("/");
     expect(await screen.findByRole("alert")).toHaveTextContent("sidadr serve");
-    expect(await screen.findByText("Moteur injoignable")).toBeInTheDocument();
+    // L'état « injoignable » n'apparaît qu'après trois nouvelles tentatives (une par seconde).
+    expect(await screen.findByText("Moteur injoignable", {}, { timeout: 6_000 })).toBeInTheDocument();
   });
 });
 

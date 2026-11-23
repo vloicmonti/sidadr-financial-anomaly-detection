@@ -12,10 +12,11 @@ import {
   ListChecks,
   Pencil,
   ShieldCheck,
+  Upload,
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { Link, NavLink, Outlet, useParams } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
 
 import { api } from "../api/client";
 import { cn, formatNumber } from "../lib";
@@ -46,7 +47,7 @@ const ITEM = "flex items-center gap-2.5 rounded-md px-2.5 py-[7px] font-medium t
 
 function Sidebar() {
   const { sessionId } = useParams();
-  const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 30_000, retry: false });
+  const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 30_000, retry: 3, retryDelay: 1_000 });
 
   return (
     <aside className="sticky top-0 flex h-screen flex-col border-r border-line bg-sidebar">
@@ -70,6 +71,15 @@ function Sidebar() {
         >
           <FolderOpen aria-hidden className="size-4" />
           Sessions
+        </NavLink>
+        <NavLink
+          to="/import"
+          className={({ isActive }) =>
+            cn(ITEM, isActive ? "bg-brand-100 text-primary" : "text-ink-2 hover:bg-subtle hover:text-ink")
+          }
+        >
+          <Upload aria-hidden className="size-4" />
+          Nouvel import
         </NavLink>
 
         {sessionId
@@ -123,6 +133,7 @@ function Sidebar() {
 
 function Topbar() {
   const { sessionId } = useParams();
+  const { pathname } = useLocation();
   const session = useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => api.session(sessionId ?? ""),
@@ -139,6 +150,11 @@ function Topbar() {
           <>
             <ChevronRight aria-hidden className="size-3.5" />
             <span className="truncate font-medium text-ink">{session.data?.name ?? sessionId}</span>
+          </>
+        ) : pathname === "/import" ? (
+          <>
+            <ChevronRight aria-hidden className="size-3.5" />
+            <span className="font-medium text-ink">Nouvel import</span>
           </>
         ) : null}
       </nav>

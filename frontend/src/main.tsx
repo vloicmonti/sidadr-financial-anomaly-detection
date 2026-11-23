@@ -8,6 +8,7 @@ import { Link, RouterProvider, createBrowserRouter } from "react-router";
 import { ApiError } from "./api/client";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/ui";
+import { ImportPage } from "./pages/ImportPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SessionsPage } from "./pages/SessionsPage";
 
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { path: "/", element: <SessionsPage /> },
+      { path: "/import", element: <ImportPage /> },
       { path: "/sessions/:sessionId", element: <OverviewPage /> },
       { path: "*", element: <NotFound /> },
     ],
