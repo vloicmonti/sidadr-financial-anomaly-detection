@@ -140,7 +140,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     )
     records = findings_to_records(result.findings(), service.decisions())
     save_findings(service.store.findings_path, records)
-    save_summary(service.store.summary_path, summarize(result, records, len(service.history())))
+    save_summary(service.store.summary_path, summarize(result, records, service.data_changes()))
 
     excluded = len(service.excluded_records())
     corrections = len(service.active_corrections())

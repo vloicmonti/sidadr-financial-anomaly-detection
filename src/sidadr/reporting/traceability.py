@@ -45,7 +45,12 @@ def build_traceability(
     store = service.store
     journal = service.history()
     check = service.verify_journal()
-    analysis_stale = summary is None or summary.get("journal_entries_at_analysis") != len(journal)
+    if summary is None:
+        analysis_stale = True
+    elif "data_changes_at_analysis" in summary:
+        analysis_stale = summary["data_changes_at_analysis"] != service.data_changes()
+    else:  # résumé antérieur : il comptait toutes les entrées du journal
+        analysis_stale = summary.get("journal_entries_at_analysis") != len(journal)
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "sidadr_version": __version__,

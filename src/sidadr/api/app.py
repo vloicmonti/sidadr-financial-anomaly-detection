@@ -12,6 +12,7 @@ import re
 import shutil
 import uuid
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -32,7 +33,7 @@ from sidadr.analysis import (
     save_summary,
     summarize,
 )
-from sidadr.config import ConfigError, default_schema, default_settings
+from sidadr.config import ConfigError, default_schema, default_settings, schema_to_dict
 from sidadr.correction import CorrectionError, CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
@@ -135,6 +136,8 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         trace = build_traceability(svc, summary)
         return {
             **svc.store.metadata,
+            # schéma effectif, y compris pour les sessions antérieures au mode générique
+            "schema": schema_to_dict(svc.schema),
             "working_rows": trace["working_rows"],
             "excluded_records": trace["excluded_records"],
             "active_corrections": trace["active_corrections"],
@@ -307,7 +310,7 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         )
         records = findings_to_records(result.findings(), svc.decisions())
         save_findings(svc.store.findings_path, records)
-        summary = summarize(result, records, len(svc.history()))
+        summary = summarize(result, records, svc.data_changes())
         save_summary(svc.store.summary_path, summary)
         return summary
 
@@ -315,7 +318,10 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
     def list_findings(
         session_id: str,
         severity: Severity | None = None,
-        kind: str | None = None,
+        kind: Annotated[
+            str | None,
+            Query(max_length=300, description="un ou plusieurs types séparés par des virgules"),
+        ] = None,
         status: str | None = None,
         q: Annotated[str | None, Query(max_length=100)] = None,
         page: Annotated[int, Query(ge=1)] = 1,
@@ -323,21 +329,28 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
     ) -> dict[str, Any]:
         records = findings_with_status(service(session_id))
         needle = (q or "").strip().lower()
-        selected = [
-            r for r in records
-            if (severity is None or r["severity"] == severity.value)
-            and (kind is None or r["kind"] == kind)
-            and (status is None or r["status"] == status)
-            and (not needle or needle in r["explanation"].lower() or needle in r["finding_id"].lower()
-                 or any(needle in rid.lower() for rid in r["record_ids"]))
-        ]  # fmt: skip
+        kinds = {k.strip() for k in (kind or "").split(",") if k.strip()}
+        tests: dict[str, Callable[[dict[str, Any]], bool]] = {
+            "severity": lambda r: severity is None or r["severity"] == severity.value,
+            "kind": lambda r: not kinds or r["kind"] in kinds,
+            "status": lambda r: status is None or r["status"] == status,
+            "q": lambda r: not needle or needle in r["explanation"].lower() or needle in r["finding_id"].lower()
+            or any(needle in rid.lower() for rid in r["record_ids"]),
+        }  # fmt: skip
+
+        def matches(r: dict[str, Any], ignore: str | None = None) -> bool:
+            return all(test(r) for name, test in tests.items() if name != ignore)
+
+        selected = [r for r in records if matches(r)]
         selected.sort(key=lambda r: (Severity(r["severity"]).rank, r["finding_id"]))
         start = (page - 1) * page_size
 
         def facet(key: str) -> dict[str, int]:
+            # Chaque facette compte selon les autres filtres actifs, pas le sien.
             counts: dict[str, int] = {}
             for r in records:
-                counts[r[key]] = counts.get(r[key], 0) + 1
+                if matches(r, ignore=key):
+                    counts[r[key]] = counts.get(r[key], 0) + 1
             return counts
 
         return {

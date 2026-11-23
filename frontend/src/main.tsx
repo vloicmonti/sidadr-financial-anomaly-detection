@@ -8,6 +8,7 @@ import { Link, RouterProvider, createBrowserRouter } from "react-router";
 import { ApiError } from "./api/client";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/ui";
+import { FindingsPage } from "./pages/FindingsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SessionsPage } from "./pages/SessionsPage";
@@ -27,6 +28,8 @@ const router = createBrowserRouter([
       { path: "/", element: <SessionsPage /> },
       { path: "/import", element: <ImportPage /> },
       { path: "/sessions/:sessionId", element: <OverviewPage /> },
+      { path: "/sessions/:sessionId/findings", element: <FindingsPage /> },
+      { path: "/sessions/:sessionId/findings/:view", element: <FindingsPage /> },
       { path: "*", element: <NotFound /> },
     ],
   },

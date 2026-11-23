@@ -36,7 +36,7 @@ def _analyze(service: CorrectionService) -> None:
     result = analyze(service.working_frame(), service.schema)
     records = findings_to_records(result.findings(), service.decisions())
     save_findings(service.store.findings_path, records)
-    save_summary(service.store.summary_path, summarize(result, records, len(service.history())))
+    save_summary(service.store.summary_path, summarize(result, records, service.data_changes()))
 
 
 def test_xlsx_export_contains_every_sheet_and_writes_text_only(

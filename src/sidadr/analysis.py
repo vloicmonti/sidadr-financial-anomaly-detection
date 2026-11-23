@@ -168,7 +168,7 @@ def load_findings(path: Path) -> list[dict[str, Any]]:
 
 
 def summarize(
-    result: AnalysisResult, records: list[dict[str, Any]], journal_entries: int
+    result: AnalysisResult, records: list[dict[str, Any]], data_changes: int
 ) -> dict[str, Any]:
     """Résumé persistant d'une analyse, réutilisé par les exports et le rapport."""
     from datetime import UTC, datetime
@@ -183,7 +183,8 @@ def summarize(
         "sidadr_version": __version__,
         "mode": result.mode,
         "rows_analyzed": result.profile.n_rows,
-        "journal_entries_at_analysis": journal_entries,
+        # Seules les modifications de données périment l'analyse ; une décision n'en est pas une.
+        "data_changes_at_analysis": data_changes,
         "score": dataclasses.asdict(result.score),
         "findings": {
             "total": len(records),

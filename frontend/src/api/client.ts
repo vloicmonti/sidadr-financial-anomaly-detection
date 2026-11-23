@@ -1,4 +1,16 @@
-import type { AnalysisSummary, Health, SchemaField, SessionCreate, SessionState, SessionSummary, UploadResult } from "./types";
+import type {
+  AnalysisSummary,
+  DecisionValue,
+  FindingDetail,
+  FindingPage,
+  FindingQuery,
+  Health,
+  SchemaField,
+  SessionCreate,
+  SessionState,
+  SessionSummary,
+  UploadResult,
+} from "./types";
 
 /** Erreur renvoyée par l'API, avec le message lisible prévu pour l'utilisateur. */
 export class ApiError extends Error {
@@ -61,4 +73,18 @@ export const api = {
   },
   createSession: (payload: SessionCreate) =>
     request<SessionState>("/sessions", { method: "POST", body: JSON.stringify(payload) }),
+  findings: (id: string, query: FindingQuery) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return request<FindingPage>(`/sessions/${encodeURIComponent(id)}/findings?${params.toString()}`);
+  },
+  finding: (id: string, findingId: string) =>
+    request<FindingDetail>(`/sessions/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}`),
+  decide: (id: string, findingId: string, decision: DecisionValue, reason: string) =>
+    request<{ target: string }>(
+      `/sessions/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/decision`,
+      { method: "POST", body: JSON.stringify({ decision, reason }) },
+    ),
 };

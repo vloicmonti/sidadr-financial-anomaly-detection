@@ -288,6 +288,15 @@ class CorrectionService:
 
     # ------------------------------------------------------------------ lecture
 
+    def data_changes(self) -> int:
+        """Entrées du journal qui modifient les données : tout sauf les décisions et leurs annulations."""
+        return sum(
+            1
+            for e in self.history()
+            if e.action_type != "decide"
+            and not (e.action_type == "undo" and (e.target or "").startswith("D"))
+        )
+
     def excluded_records(self) -> set[str]:
         with self.store.connect() as connection:
             rows = connection.execute(

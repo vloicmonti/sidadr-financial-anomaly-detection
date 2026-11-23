@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Pencil,
+  SearchCheck,
   ShieldCheck,
   Upload,
   Users,
@@ -28,15 +29,21 @@ interface NavItem {
 }
 
 const SESSION_NAV: { group: string; items: NavItem[] }[] = [
-  { group: "Session", items: [{ label: "Vue d'ensemble", icon: LayoutDashboard, to: (id) => `/sessions/${id}` }] },
+  {
+    group: "Session",
+    items: [
+      { label: "Vue d'ensemble", icon: LayoutDashboard, to: (id) => `/sessions/${id}` },
+      { label: "Tous les constats", icon: SearchCheck, to: (id) => `/sessions/${id}/findings` },
+    ],
+  },
   { group: "Données", items: [{ label: "Qualité des données", icon: Gauge }] },
   {
     group: "Détection",
     items: [
-      { label: "Doublons", icon: Copy },
-      { label: "Noms & identités", icon: Users },
-      { label: "Anomalies", icon: Activity },
-      { label: "Règles métier", icon: ListChecks },
+      { label: "Doublons", icon: Copy, to: (id) => `/sessions/${id}/findings/duplicates` },
+      { label: "Noms & identités", icon: Users, to: (id) => `/sessions/${id}/findings/identities` },
+      { label: "Anomalies", icon: Activity, to: (id) => `/sessions/${id}/findings/anomalies` },
+      { label: "Règles métier", icon: ListChecks, to: (id) => `/sessions/${id}/findings/rules` },
     ],
   },
   { group: "Traitement", items: [{ label: "Corrections", icon: Pencil }, { label: "Historique", icon: History }] },

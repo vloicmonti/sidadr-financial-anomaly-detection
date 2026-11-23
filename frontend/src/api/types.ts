@@ -66,6 +66,7 @@ export interface AnalysisSummary {
 
 export interface SessionState extends SessionSummary {
   mode?: SessionMode;
+  schema?: SchemaField[];
   working_rows: number;
   excluded_records: number;
   active_corrections: number;
@@ -143,3 +144,44 @@ export interface SessionCreate {
   required_fields?: string[];
   group_by?: string[];
 }
+
+export interface Finding {
+  finding_id: string;
+  kind: string;
+  severity: Severity;
+  record_ids: string[];
+  rule_id: string;
+  explanation: string;
+  recommendation: string;
+  field: string | null;
+  observed_value: string | null;
+  threshold: string | null;
+  score: number | null;
+  key: string;
+  status: FindingStatus;
+}
+
+export type RecordRow = Record<string, string | number | boolean | null> & { record_id: string };
+
+export interface FindingDetail extends Finding {
+  records: (RecordRow & { excluded: boolean })[];
+}
+
+export interface FindingPage {
+  total: number;
+  page: number;
+  page_size: number;
+  items: Finding[];
+  facets: { severity: Record<string, number>; kind: Record<string, number>; status: Record<string, number> };
+}
+
+export interface FindingQuery {
+  severity?: Severity | undefined;
+  kind?: string | undefined;
+  status?: FindingStatus | undefined;
+  q?: string | undefined;
+  page?: number | undefined;
+  page_size?: number | undefined;
+}
+
+export type DecisionValue = Exclude<FindingStatus, "open">;

@@ -102,6 +102,8 @@ def test_review_cycle(client: TestClient, session_id: str) -> None:
         f"/api/sessions/{session_id}/findings", params={"status": "rejected"}
     ).json()
     assert match["finding_id"] in [i["finding_id"] for i in rejected["items"]]
+    # Une décision ne modifie pas les données : l'analyse reste à jour.
+    assert client.get(f"/api/sessions/{session_id}").json()["analysis_up_to_date"] is True
 
     missing = _first(client, session_id, kind="rule_violation", q="branch_code = (vide)")
     record_id = missing["record_ids"][0]
@@ -260,3 +262,32 @@ def test_unknown_generic_key_is_rejected(client: TestClient) -> None:
         "/api/sessions", json={"upload_id": upload["upload_id"], "key_fields": ["Inexistante"]}
     )
     assert response.status_code == 422 and "Colonne inconnue" in response.json()["detail"]
+
+
+def test_findings_can_be_filtered_by_several_kinds(client: TestClient, session_id: str) -> None:
+    both = client.get(
+        f"/api/sessions/{session_id}/findings",
+        params={"kind": "exact_duplicate_row,duplicate_key", "page_size": 200},
+    ).json()
+    facets = both["facets"]["kind"]
+    assert both["total"] == facets.get("exact_duplicate_row", 0) + facets.get("duplicate_key", 0)
+    assert {i["kind"] for i in both["items"]} <= {"exact_duplicate_row", "duplicate_key"}
+
+
+def test_facets_follow_the_other_active_filters(client: TestClient, session_id: str) -> None:
+    rules = client.get(
+        f"/api/sessions/{session_id}/findings", params={"kind": "rule_violation"}
+    ).json()
+    every = client.get(f"/api/sessions/{session_id}/findings").json()
+    # La facette de sévérité est restreinte au type choisi ; celle du type ignore son propre filtre.
+    assert sum(rules["facets"]["severity"].values()) == rules["total"]
+    assert rules["facets"]["kind"] == every["facets"]["kind"]
+    assert sum(every["facets"]["severity"].values()) == every["total"]
+
+
+def test_session_state_always_exposes_the_effective_schema(
+    client: TestClient, session_id: str
+) -> None:
+    state = client.get(f"/api/sessions/{session_id}").json()
+    names = [f["name"] for f in state["schema"]]
+    assert "transaction_id" in names and "amount" in names
