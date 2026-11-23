@@ -4,7 +4,7 @@
 
 > **Système Intelligent de Détection des Anomalies et Duplications** dans des données financières multi-sources : import, profilage, doublons, noms similaires, clients multi-banques, valeurs atypiques, règles métier, corrections tracées et rapport qualité.
 
-**Statut : v0.1 — moteur complet en ligne de commande.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. L'interface web (React) est la prochaine étape.
+**Statut : v0.1 — moteur complet, interface web en cours.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. Le moteur s'utilise en ligne de commande ou via l'interface React, dont les principaux écrans de revue sont livrés.
 
 ---
 
@@ -120,7 +120,15 @@ npm ci
 npm run dev
 ```
 
-Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles : liste des sessions, **import** (glisser-déposer, aperçu, mode suggéré, configuration du mode générique ou correspondance bancaire) et vue d'ensemble (analyse, score, constats par sévérité, état de la revue). Les autres écrans arrivent au fil de la phase 11.
+Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
+
+- **Sessions** et **import** : glisser-déposer, aperçu, mode suggéré, configuration du mode générique ou correspondance bancaire.
+- **Vue d'ensemble** : analyse, score de qualité, constats par sévérité, état de la revue.
+- **Constats** (vues Doublons, Noms & identités, Anomalies, Règles métier) : filtres, détail avec les colonnes divergentes surlignées, décision motivée.
+- **Corrections** : recherche d'enregistrements, valeur d'origine et valeur de travail champ par champ, correction validée par le moteur, exclusion, annulation.
+- **Historique** : journal d'audit filtrable, vérification du chaînage, annulation depuis le journal.
+
+Les écrans Qualité des données et Rapports & exports restent à livrer (le rapport et les exports existent déjà en ligne de commande et dans l'API).
 
 ## Architecture
 
@@ -176,7 +184,7 @@ Ce projet est inspiré de travaux de contrôle qualité de données financières
 - Prototype local mono-utilisateur, sans authentification ; l'auteur des actions est déclaré.
 - Seuils calibrés sur des données synthétiques.
 - Le journal d'audit détecte une falsification mais ne l'empêche pas (pas de signature externe).
-- Pas encore d'interface graphique : la v0.1 s'utilise en ligne de commande.
+- Interface web incomplète : qualité des données, rapports et exports ne sont encore accessibles qu'en ligne de commande ou par l'API.
 
 ## Documentation
 
@@ -184,7 +192,7 @@ Ce projet est inspiré de travaux de contrôle qualité de données financières
 - [Spécifications et résultats par module](docs/specs/ENGINE_SPEC.md)
 - [Rapprochement des noms : méthode et calibration](docs/specs/NAME_MATCHING.md)
 - [Dictionnaire de données](docs/data_dictionary/DATA_DICTIONARY.md)
-- [Design system de l'interface à venir](docs/design/DESIGN_SYSTEM.md)
+- [Design system de l'interface](docs/design/DESIGN_SYSTEM.md)
 
 ## Auteur
 

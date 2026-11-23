@@ -1,10 +1,11 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Search, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { api } from "../api/client";
 import type { DecisionValue, Finding, FindingDetail, FindingStatus, RecordRow, SchemaField, Severity } from "../api/types";
+import { StaleAnalysisBanner, useInvalidateSession } from "../components/session";
 import { Button, Card, EmptyState, ErrorState, SEVERITIES, SeverityBadge, Skeleton } from "../components/ui";
 import { CUSTOMER_FIELDS, CUSTOMER_KINDS, DECISIONS, FINDING_VIEWS, KIND_LABELS, STATUS_LABELS, isFindingView } from "../findings";
 import { cn, formatNumber } from "../lib";
@@ -114,7 +115,7 @@ function recordsForDisplay(detail: FindingDetail): { rows: (RecordRow & { exclud
   return { rows: [...seen.values()], grouped: true };
 }
 
-function RecordsTable({ detail, schema }: { detail: FindingDetail; schema: SchemaField[] | undefined }) {
+function RecordsTable({ sessionId, detail, schema }: { sessionId: string; detail: FindingDetail; schema: SchemaField[] | undefined }) {
   const { rows, grouped } = recordsForDisplay(detail);
   const columns = useMemo(() => {
     const names = schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {}).filter((k) => !TECHNICAL.has(k));
@@ -154,7 +155,9 @@ function RecordsTable({ detail, schema }: { detail: FindingDetail; schema: Schem
             {rows.map((row) => (
               <tr key={row.record_id} className={cn("border-t border-line-subtle", row.excluded ? "text-ink-3 line-through" : "")}>
                 <th scope="row" className="px-2.5 py-1.5 text-left font-mono font-normal whitespace-nowrap">
-                  {row.record_id}
+                  <Link to={`/sessions/${sessionId}/records?r=${encodeURIComponent(row.record_id)}`} className="hover:text-primary hover:underline">
+                    {row.record_id}
+                  </Link>
                   {"operations" in row ? <span className="ml-1.5 font-sans text-ink-3">· {String(row.operations)} op.</span> : null}
                 </th>
                 {columns.map((c) => (
@@ -172,7 +175,7 @@ function RecordsTable({ detail, schema }: { detail: FindingDetail; schema: Schem
 }
 
 function DecisionForm({ sessionId, finding }: { sessionId: string; finding: Finding }) {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSession(sessionId);
   const [decision, setDecision] = useState<DecisionValue>("confirmed");
   const [reason, setReason] = useState("");
   const reasonId = useId();
@@ -181,11 +184,7 @@ function DecisionForm({ sessionId, finding }: { sessionId: string; finding: Find
     mutationFn: () => api.decide(sessionId, finding.finding_id, decision, reason.trim()),
     onSuccess: async () => {
       setReason("");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["findings", sessionId] }),
-        queryClient.invalidateQueries({ queryKey: ["finding", sessionId, finding.finding_id] }),
-        queryClient.invalidateQueries({ queryKey: ["session", sessionId] }),
-      ]);
+      await invalidate();
     },
   });
   const valid = reason.trim().length >= 5;
@@ -230,7 +229,7 @@ function DecisionForm({ sessionId, finding }: { sessionId: string; finding: Find
       <span id={helpId} className="-mt-1.5 text-xs text-ink-3">
         Obligatoire (5 caractères au moins). Inscrit au journal d'audit avec la date et l'auteur ; la décision reste annulable.
       </span>
-      {decide.isError ? <ErrorState error={decide.error} /> : null}
+      {decide.isError ? <ErrorState title="Décision refusée" error={decide.error} /> : null}
       {decide.isSuccess ? (
         <p role="status" className="flex items-center gap-2 rounded-md bg-success-bg px-3 py-2 text-[13px] text-success">
           <CheckCircle2 aria-hidden className="size-4" />
@@ -295,7 +294,7 @@ function DetailPanel({
               <b className="font-medium text-ink">Recommandation : </b>
               {detail.data.recommendation}
             </p>
-            <RecordsTable detail={detail.data} schema={schema} />
+            <RecordsTable sessionId={sessionId} detail={detail.data} schema={schema} />
             <DecisionForm key={detail.data.finding_id} sessionId={sessionId} finding={detail.data} />
           </>
         ) : null}
@@ -359,12 +358,7 @@ export function FindingsPage() {
           qualifie une opération de fraude.
         </p>
       </div>
-      {session.data && !session.data.analysis_up_to_date ? (
-        <div role="status" className="mb-4 flex items-center gap-2 rounded-lg bg-warning-bg px-4 py-2.5 text-[13px] text-warning">
-          <CircleAlert aria-hidden className="size-4" />
-          Des corrections ont été faites depuis l'analyse : relancez-la depuis la vue d'ensemble pour des constats à jour.
-        </div>
-      ) : null}
+      <StaleAnalysisBanner session={session.data} />
 
       <div className={cn("grid items-start gap-5", selected ? "grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_minmax(420px,520px)]" : "grid-cols-[minmax(0,1fr)]")}>
         <Card>

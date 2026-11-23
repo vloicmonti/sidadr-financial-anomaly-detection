@@ -34,7 +34,7 @@ from sidadr.analysis import (
     summarize,
 )
 from sidadr.config import ConfigError, default_schema, default_settings, schema_to_dict
-from sidadr.correction import CorrectionError, CorrectionService, Decision
+from sidadr.correction import EXCLUDED, CorrectionError, CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
 from sidadr.ingestion import ImportRejected, ImportSession, MappingError
@@ -416,13 +416,8 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         frame = svc.working_frame(include_excluded=include_excluded)
         needle = (q or "").strip().lower()
         if needle:
-            columns = [
-                "record_id",
-                "transaction_id",
-                "customer_id",
-                "customer_name",
-                "account_number",
-            ]
+            # Toutes les colonnes du schéma de la session : fonctionne aussi en mode générique.
+            columns = ["record_id", *(n for n in svc.schema.names if n in frame.columns)]
             mask = pd.Series(False, index=frame.index)
             for column in columns:
                 mask |= (
@@ -434,12 +429,18 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
                 )
             frame = frame[mask]
         start = (page - 1) * page_size
-        return {
-            "total": len(frame),
-            "page": page,
-            "page_size": page_size,
-            "items": frame_rows(frame.iloc[start : start + page_size]),
-        }
+        excluded = svc.excluded_records()
+        corrected: dict[str, list[str]] = {}
+        for row in svc.active_corrections():
+            if row["field"] != EXCLUDED:
+                corrected.setdefault(row["record_id"], []).append(row["field"])
+        items = frame_rows(
+            frame.drop(columns=[EXCLUDED], errors="ignore").iloc[start : start + page_size]
+        )
+        for item in items:
+            item["excluded"] = item["record_id"] in excluded
+            item["corrected_fields"] = sorted(set(corrected.get(item["record_id"], [])))
+        return {"total": len(frame), "page": page, "page_size": page_size, "items": items}
 
     @app.get("/api/sessions/{session_id}/records/{record_id}")
     def get_record(session_id: str, record_id: str) -> dict[str, Any]:
@@ -457,7 +458,9 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         return {
             "record_id": record_id,
             "original": frame_rows(match)[0],
-            "working": frame_rows(working[working["record_id"] == record_id])[0],
+            "working": frame_rows(
+                working.drop(columns=[EXCLUDED], errors="ignore")[working["record_id"] == record_id]
+            )[0],
             "excluded": record_id in svc.excluded_records(),
             "corrections": corrections,
             "findings": findings,

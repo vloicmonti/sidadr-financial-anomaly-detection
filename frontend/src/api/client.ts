@@ -5,6 +5,10 @@ import type {
   FindingPage,
   FindingQuery,
   Health,
+  History,
+  RecordDetail,
+  RecordPage,
+  RecordQuery,
   SchemaField,
   SessionCreate,
   SessionState,
@@ -59,6 +63,17 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function query(values: object): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== "" && value !== false) params.set(key, String(value));
+  }
+  return params.toString();
+}
+
+const session = (id: string) => `/sessions/${encodeURIComponent(id)}`;
+const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
+
 export const api = {
   health: () => request<Health>("/health"),
   sessions: () => request<SessionSummary[]>("/sessions"),
@@ -73,18 +88,25 @@ export const api = {
   },
   createSession: (payload: SessionCreate) =>
     request<SessionState>("/sessions", { method: "POST", body: JSON.stringify(payload) }),
-  findings: (id: string, query: FindingQuery) => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined && value !== "") params.set(key, String(value));
-    }
-    return request<FindingPage>(`/sessions/${encodeURIComponent(id)}/findings?${params.toString()}`);
-  },
+  findings: (id: string, filters: FindingQuery) => request<FindingPage>(`${session(id)}/findings?${query(filters)}`),
   finding: (id: string, findingId: string) =>
     request<FindingDetail>(`/sessions/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}`),
   decide: (id: string, findingId: string, decision: DecisionValue, reason: string) =>
     request<{ target: string }>(
       `/sessions/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/decision`,
-      { method: "POST", body: JSON.stringify({ decision, reason }) },
+      post({ decision, reason }),
     ),
+  records: (id: string, filters: RecordQuery) => request<RecordPage>(`${session(id)}/records?${query(filters)}`),
+  record: (id: string, recordId: string) =>
+    request<RecordDetail>(`${session(id)}/records/${encodeURIComponent(recordId)}`),
+  correct: (id: string, recordId: string, field: string, value: string | null, reason: string) =>
+    request<{ target: string; old_value: string | null; new_value: string | null }>(
+      `${session(id)}/corrections`,
+      post({ record_id: recordId, field, value, reason }),
+    ),
+  exclude: (id: string, recordId: string, reason: string) =>
+    request<{ target: string }>(`${session(id)}/exclusions`, post({ record_id: recordId, reason })),
+  undo: (id: string, target: string, reason: string) =>
+    request<{ target: string }>(`${session(id)}/undo`, post({ target, reason })),
+  history: (id: string) => request<History>(`${session(id)}/history`),
 };

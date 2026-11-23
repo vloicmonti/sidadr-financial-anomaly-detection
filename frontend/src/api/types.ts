@@ -161,7 +161,11 @@ export interface Finding {
   status: FindingStatus;
 }
 
-export type RecordRow = Record<string, string | number | boolean | null> & { record_id: string };
+/** Une ligne de données : colonnes du schéma de la session, plus les colonnes techniques. */
+export interface RecordRow {
+  record_id: string;
+  [column: string]: unknown;
+}
 
 export interface FindingDetail extends Finding {
   records: (RecordRow & { excluded: boolean })[];
@@ -185,3 +189,64 @@ export interface FindingQuery {
 }
 
 export type DecisionValue = Exclude<FindingStatus, "open">;
+
+export interface RecordQuery {
+  q?: string | undefined;
+  include_excluded?: boolean | undefined;
+  page?: number | undefined;
+  page_size?: number | undefined;
+}
+
+export interface RecordListItem extends RecordRow {
+  excluded: boolean;
+  corrected_fields: string[];
+}
+
+export interface RecordPage {
+  total: number;
+  page: number;
+  page_size: number;
+  items: RecordListItem[];
+}
+
+export interface Correction {
+  id: number;
+  record_id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string;
+  actor: string;
+  created_at: string;
+  active: 0 | 1;
+}
+
+export interface RecordDetail {
+  record_id: string;
+  original: RecordRow;
+  working: RecordRow;
+  excluded: boolean;
+  corrections: Correction[];
+  findings: Finding[];
+}
+
+export type AuditAction = "correct" | "exclude" | "decide" | "undo";
+
+export interface AuditEntry {
+  entry_id: number;
+  ts_utc: string;
+  actor: string;
+  action_type: AuditAction;
+  target: string | null;
+  record_id: string | null;
+  field: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string | null;
+  finding_id: string | null;
+}
+
+export interface History {
+  entries: AuditEntry[];
+  integrity: { entries: number; valid: boolean; first_broken_entry: number | null };
+}

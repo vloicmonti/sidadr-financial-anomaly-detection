@@ -173,7 +173,7 @@ PostgreSQL n'est **pas** retenu : un seul utilisateur local, aucun accès concur
 | GET | `/api/sessions/{id}/findings` | constats filtrés, recherche, pagination, facettes |
 | GET | `/api/sessions/{id}/findings/{fid}` | détail et enregistrements concernés |
 | POST | `/api/sessions/{id}/findings/{fid}/decision` | décision motivée |
-| GET | `/api/sessions/{id}/records`, `/records/{rid}` | données de travail ; original, valeur actuelle et historique d'un enregistrement |
+| GET | `/api/sessions/{id}/records`, `/records/{rid}` | données de travail (recherche sur toutes les colonnes du schéma, indicateurs exclu / champs corrigés) ; original, valeur actuelle et historique d'un enregistrement |
 | POST | `/api/sessions/{id}/corrections`, `/exclusions`, `/undo` | actions motivées et réversibles |
 | GET | `/api/sessions/{id}/history` | journal et vérification d'intégrité |
 | GET | `/api/sessions/{id}/export`, `/report` | XLSX, CSV (zip), rapport HTML |

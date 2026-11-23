@@ -162,19 +162,20 @@ class CorrectionService:
         if field not in self.schema.names:
             raise CorrectionError(f"Champ inconnu : {field}")
         spec = self.schema[field]
+        name = spec.label or field  # le libellé lisible, celui que l'utilisateur voit
         if value is None or not value.strip():
             if spec.required:
-                raise CorrectionError(f"{field} est obligatoire : il ne peut pas être vidé.")
+                raise CorrectionError(f"{name} est obligatoire : il ne peut pas être vidé.")
             return
         if spec.type == "decimal" and parse_decimal(value) is None:
-            raise CorrectionError(f"{field} attend un nombre : {value!r} refusé.")
+            raise CorrectionError(f"{name} attend un nombre : {value!r} refusé.")
         if spec.type == "date" and parse_date(value)[0] is not DateStatus.VALID:
             raise CorrectionError(
-                f"{field} attend une date valide au format AAAA-MM-JJ : {value!r} refusé."
+                f"{name} attend une date valide (AAAA-MM-JJ ou JJ/MM/AAAA) : {value!r} refusé."
             )
         if spec.type == "enum" and value.strip() not in spec.values:
             raise CorrectionError(
-                f"{field} attend l'une des valeurs {', '.join(spec.values)} : {value!r} refusé."
+                f"{name} attend l'une des valeurs {', '.join(spec.values)} : {value!r} refusé."
             )
 
     def current_value(self, record_id: str, field: str) -> str | None:

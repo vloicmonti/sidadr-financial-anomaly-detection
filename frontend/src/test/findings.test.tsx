@@ -156,6 +156,6 @@ describe("écran des constats", () => {
   it("signale une analyse périmée", async () => {
     mockApi({ ...SESSION, analysis_up_to_date: false } as unknown as SessionState);
     renderAt("/sessions/S1/findings");
-    expect(await screen.findByText(/Des corrections ont été faites depuis l'analyse/)).toBeInTheDocument();
+    expect(await screen.findByText(/les constats ne sont plus à jour/)).toBeInTheDocument();
   });
 });

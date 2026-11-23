@@ -106,13 +106,21 @@ export function EmptyState({
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({
+  error,
+  onRetry,
+  title = "Le chargement a échoué",
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  title?: string;
+}) {
   const message = error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
   return (
     <div role="alert" className="flex items-start gap-3 rounded-lg border border-danger-line bg-danger-bg px-4 py-3.5 text-[13px] text-danger">
       <OctagonX aria-hidden className="mt-0.5 size-4 shrink-0" />
       <div className="flex-1">
-        <p className="font-semibold">Le chargement a échoué</p>
+        <p className="font-semibold">{title}</p>
         <p className="mt-0.5">{message}</p>
       </div>
       {onRetry ? (

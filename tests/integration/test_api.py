@@ -254,6 +254,9 @@ def test_generic_file_through_the_api(client: TestClient) -> None:
         },
     )
     assert bad.status_code == 422
+    # La recherche d'enregistrements porte sur les colonnes du schéma générique.
+    found = client.get(f"/api/sessions/{sid}/records", params={"q": "doublon"}).json()
+    assert found["total"] == 1 and found["items"][0]["libelle"] == "Doublon"
 
 
 def test_unknown_generic_key_is_rejected(client: TestClient) -> None:
@@ -291,3 +294,33 @@ def test_session_state_always_exposes_the_effective_schema(
     state = client.get(f"/api/sessions/{session_id}").json()
     names = [f["name"] for f in state["schema"]]
     assert "transaction_id" in names and "amount" in names
+
+
+def test_records_flag_corrections_and_exclusions(client: TestClient) -> None:
+    csv = b"Code;Libelle;Prix\nA1;Vis;1,50\nA2;Ecrou;0,90\nA3;Clou;0,10\n"
+    upload = client.post("/api/imports", files=[("files", ("pieces.csv", csv))]).json()
+    sid = client.post("/api/sessions", json={"upload_id": upload["upload_id"]}).json()["session_id"]
+    first, second = (
+        i["record_id"] for i in client.get(f"/api/sessions/{sid}/records").json()["items"][:2]
+    )
+    reason = {"reason": "contrôle fournisseur"}
+    client.post(
+        f"/api/sessions/{sid}/corrections",
+        json={"record_id": first, "field": "prix", "value": "1.60", **reason},
+    )
+    excluded = client.post(f"/api/sessions/{sid}/exclusions", json={"record_id": second, **reason})
+    assert excluded.status_code == 201
+
+    visible = client.get(f"/api/sessions/{sid}/records").json()
+    assert visible["total"] == 2
+    assert (
+        visible["items"][0]["corrected_fields"] == ["prix"]
+        and "__excluded__" not in visible["items"][0]
+    )
+    every = client.get(f"/api/sessions/{sid}/records", params={"include_excluded": True}).json()
+    assert [i["excluded"] for i in every["items"]] == [False, True, False]
+
+    detail = client.get(f"/api/sessions/{sid}/records/{second}").json()
+    assert detail["excluded"] is True and "__excluded__" not in detail["working"]
+    client.post(f"/api/sessions/{sid}/undo", json={"target": excluded.json()["target"], **reason})
+    assert client.get(f"/api/sessions/{sid}/records").json()["total"] == 3

@@ -46,7 +46,13 @@ const SESSION_NAV: { group: string; items: NavItem[] }[] = [
       { label: "Règles métier", icon: ListChecks, to: (id) => `/sessions/${id}/findings/rules` },
     ],
   },
-  { group: "Traitement", items: [{ label: "Corrections", icon: Pencil }, { label: "Historique", icon: History }] },
+  {
+    group: "Traitement",
+    items: [
+      { label: "Corrections", icon: Pencil, to: (id) => `/sessions/${id}/records` },
+      { label: "Historique", icon: History, to: (id) => `/sessions/${id}/history` },
+    ],
+  },
   { group: "Sorties", items: [{ label: "Rapports & exports", icon: Download }] },
 ];
 
