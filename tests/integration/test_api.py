@@ -207,3 +207,56 @@ def test_cors_allows_only_the_frontend(client: TestClient) -> None:
         headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "GET"},
     )
     assert "access-control-allow-origin" not in other.headers
+
+
+def test_generic_file_through_the_api(client: TestClient) -> None:
+    csv = "Code article;Libellé;Quantité;Prix unitaire\n" + "".join(
+        f"A{i:03d};Article {i};{i % 7 + 1};{10 + i % 5},90\n" for i in range(80)
+    )
+    csv += "A001;Doublon;3;12,90\nA090;;2;9990,00\n"
+    upload = client.post("/api/imports", files=[("files", ("stock.csv", csv.encode("utf-8")))])
+    assert upload.status_code == 200
+    body = upload.json()
+    assert body["suggested_mode"] == "generic"
+    types = {f["label"]: f["type"] for f in body["generic_fields"]}
+    assert types == {
+        "Code article": "text",
+        "Libellé": "text",
+        "Quantité": "decimal",
+        "Prix unitaire": "decimal",
+    }
+
+    created = client.post(
+        "/api/sessions",
+        json={
+            "upload_id": body["upload_id"],
+            "name": "Stock",
+            "key_fields": ["Code article"],
+            "required_fields": ["Libellé"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["mode"] == "generic"
+    sid = created.json()["session_id"]
+    summary = client.post(f"/api/sessions/{sid}/analyze").json()
+    assert summary["mode"] == "generic"
+    assert summary["findings"]["by_kind"].get("duplicate_key") == 1
+    assert summary["findings"]["by_kind"].get("rule_violation") == 1
+    bad = client.post(
+        f"/api/sessions/{sid}/corrections",
+        json={
+            "record_id": "stock:1",
+            "field": "quantite",
+            "value": "beaucoup",
+            "reason": "test de type",
+        },
+    )
+    assert bad.status_code == 422
+
+
+def test_unknown_generic_key_is_rejected(client: TestClient) -> None:
+    upload = client.post("/api/imports", files=[("files", ("x.csv", b"A;B\n1;2\n3;4\n"))]).json()
+    response = client.post(
+        "/api/sessions", json={"upload_id": upload["upload_id"], "key_fields": ["Inexistante"]}
+    )
+    assert response.status_code == 422 and "Colonne inconnue" in response.json()["detail"]

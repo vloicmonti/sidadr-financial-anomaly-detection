@@ -27,6 +27,7 @@ from typing import Any
 
 import pandas as pd
 
+from sidadr.config import Schema, default_schema, schema_from_dict, schema_to_dict
 from sidadr.ingestion import ImportSession
 
 SCHEMA_SQL = """
@@ -118,6 +119,21 @@ class SessionStore:
     def summary_path(self) -> Path:
         return self.directory / "analysis_summary.json"
 
+    @property
+    def mode(self) -> str:
+        """« banking » (schéma bancaire) ou « generic » (schéma déduit des fichiers)."""
+        return str(self.metadata.get("mode", "banking"))
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """Options d'analyse : clé d'unicité, regroupement des anomalies, règles."""
+        return dict(self.metadata.get("options") or {})
+
+    def schema(self) -> Schema:
+        """Schéma de la session : celui enregistré à la création, sinon le schéma bancaire."""
+        raw = self.metadata.get("schema")
+        return schema_from_dict(raw) if raw else default_schema()
+
     def original_frame(self) -> pd.DataFrame:
         """Relit l'instantané après avoir vérifié qu'il n'a pas été modifié."""
         if _sha256(self.original_path) != self.metadata["original_sha256"]:
@@ -143,7 +159,15 @@ class Workspace:
     def sessions_dir(self) -> Path:
         return self.root / "sessions"
 
-    def create_session(self, session: ImportSession, name: str | None = None) -> SessionStore:
+    def create_session(
+        self,
+        session: ImportSession,
+        name: str | None = None,
+        mode: str = "banking",
+        options: dict[str, Any] | None = None,
+    ) -> SessionStore:
+        if mode not in ("banking", "generic"):
+            raise WorkspaceError(f"Mode inconnu : {mode!r} (attendus : banking, generic).")
         if not session.tables:
             raise WorkspaceError("Aucun fichier importé : rien à enregistrer.")
         stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
@@ -162,6 +186,9 @@ class Workspace:
             "created_at": _now(),
             "rows": len(frame),
             "original_sha256": _sha256(original),
+            "mode": mode,
+            "schema": schema_to_dict(session.schema),
+            "options": options or {},
             "imports": [
                 {
                     "import_id": t.import_id,

@@ -84,10 +84,15 @@ class Anomaly:
         group = " · ".join(self.group)
         ratio = self.value / self.stats.median if self.stats.median else float("nan")
         side = "au-dessus" if self.direction == "high" else "en dessous"
-        times = f"{ratio:.1f}" if ratio < 10 else fmt_amount(ratio)
+        times = (
+            f"{ratio:.1f}".replace(".", ",")
+            if ratio < 10
+            else f"{round(ratio):,}".replace(",", NARROW_NBSP)
+        )
+        where = "de la colonne" if self.group == ("ensemble",) else f"du groupe {group}"
         return (
-            f"{self.field} = {fmt_amount(self.value)}, soit {times} fois la médiane du groupe {group} "
-            f"({fmt_amount(self.stats.median)} sur {self.stats.count} opérations) : nettement {side} "
+            f"{self.field} = {fmt_amount(self.value)}, soit {times} fois la médiane {where} "
+            f"({fmt_amount(self.stats.median)} sur {self.stats.count} valeurs) : nettement {side} "
             f"des valeurs habituelles ; {self.threshold_text(settings)}."
         )
 
@@ -123,6 +128,9 @@ class AnomalyReport:
         return [a.to_finding(self.settings) for a in self.anomalies]
 
 
+NARROW_NBSP = chr(0x202F)  # espace fine insécable, séparateur de milliers français
+
+
 def fmt_amount(value: float) -> str:
     """1234567.8 -> « 1 234 568 » ; 3.456 -> « 3,46 » (format français)."""
     if abs(value) >= 100:
@@ -143,6 +151,8 @@ def _numeric_column(frame: pd.DataFrame, name: str) -> list[float | None]:
 
 
 def _group_key(frame: pd.DataFrame, fields: tuple[str, ...]) -> list[tuple[str, ...] | None]:
+    if not fields:  # aucun regroupement : toutes les lignes forment un seul groupe
+        return [("ensemble",)] * len(frame)
     keys: list[tuple[str, ...] | None] = []
     columns = [frame[f].tolist() for f in fields]
     for values in zip(*columns, strict=True):

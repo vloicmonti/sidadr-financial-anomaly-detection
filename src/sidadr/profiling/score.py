@@ -42,9 +42,13 @@ def _measure(
 ) -> tuple[float | None, int, int, str]:
     if name == "completeness":
         required = [c for c in profile.columns if c.required]
+        note = ""
+        if not required:  # mode générique sans champ obligatoire désigné
+            required = list(profile.columns)
+            note = "aucun champ obligatoire désigné : complétude mesurée sur toutes les colonnes"
         bad = sum(c.missing for c in required)
         total = profile.n_rows * len(required)
-        return (1 - bad / total if total else 1.0), bad, total, ""
+        return (1 - bad / total if total else 1.0), bad, total, note
     if name == "uniqueness":
         total = profile.n_rows
         if duplicate_rows is None:

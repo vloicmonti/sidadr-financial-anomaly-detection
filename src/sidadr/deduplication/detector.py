@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 import pandas as pd
 
@@ -189,10 +190,17 @@ def detect_duplicates(
         )
 
     # 1-3. Doublons sur l'identifiant.
-    key_present = comparable[list(key_fields)].notna().all(axis=1)
+    key_present = (
+        comparable[list(key_fields)].notna().all(axis=1)
+        if key_fields
+        else pd.Series(False, index=comparable.index)  # sans clé : comparaison de lignes complètes
+    )
     rule = "+".join(key_fields)
     with_key = comparable[key_present]
-    for key_value, members in with_key.groupby(list(key_fields), sort=True):
+    groups_by_key: list[tuple[Any, pd.DataFrame]] = (
+        list(with_key.groupby(list(key_fields), sort=True)) if key_fields else []
+    )
+    for key_value, members in groups_by_key:
         index = [int(i) for i in members.index]
         if len(index) < 2:
             continue
@@ -232,7 +240,12 @@ def detect_duplicates(
 
     notes = []
     rows_without_key = int((~key_present).sum())
-    if rows_without_key:
+    if not key_fields:
+        notes.append(
+            "Aucune clé d'unicité définie : seules les lignes entièrement identiques sont recherchées. "
+            "Désignez une colonne identifiant pour détecter aussi les identifiants en double."
+        )
+    elif rows_without_key:
         notes.append(
             f"{rows_without_key} enregistrements sans {rule} : seuls les doublons de ligne complète "
             "et les combinaisons sont recherchés pour eux."

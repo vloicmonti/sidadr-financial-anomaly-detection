@@ -24,6 +24,7 @@ class Method(StrEnum):
     SYNONYM = "synonym"  # en-tête identique (après normalisation) à un synonyme du schéma
     SIMILARITY = "similarity"  # en-tête proche d'un synonyme
     MANUAL = "manual"  # choisi ou corrigé par l'utilisateur
+    IDENTITY = "identity"  # mode générique : la colonne devient un champ du même nom
     NONE = "none"
 
 

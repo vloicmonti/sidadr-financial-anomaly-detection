@@ -30,8 +30,10 @@ from sidadr.analysis import (
 from sidadr.correction import CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
+from sidadr.ingestion import ImportSession
+from sidadr.ingestion.generic import GenericSchema, infer_generic_schema, suggest_mode
 from sidadr.reporting.html_report import write_report
-from sidadr.storage import Workspace, default_workspace
+from sidadr.storage import SessionStore, Workspace, default_workspace
 
 EXIT_OK, EXIT_ERROR, EXIT_NEEDS_CONFIRMATION = 0, 1, 2
 
@@ -44,18 +46,70 @@ def _service(args: argparse.Namespace) -> CorrectionService:
     return CorrectionService(_workspace(args).open_session(args.session), actor=args.actor)
 
 
+def print_generic_schema(generic: GenericSchema) -> None:
+    print("\n  Schéma déduit des fichiers (mode générique) :")
+    for f in generic.fields:
+        spec = generic.schema[f.name]
+        flag = "  [obligatoire]" if spec.required else ""
+        print(
+            f"    {f.label:<26} -> {f.name:<24} {f.type:<8} {f.filled:>7} valeurs  ({f.reason}){flag}"
+        )
+
+
+def _print_created(store: SessionStore) -> None:
+    print(f"\nSession créée : {store.session_id}  (mode {store.mode})")
+    print(f"  {store.metadata['rows']} enregistrements ; instantané original en lecture seule")
+    print(f"  empreinte SHA-256 : {store.metadata['original_sha256'][:16]}…")
+    if store.options.get("key_fields"):
+        print(f"  clé d'unicité : {', '.join(store.options['key_fields'])}")
+    print(f"  dossier : {store.directory}")
+    print(f"\nÉtape suivante : sidadr analyze {store.session_id}")
+
+
 def cmd_session_create(
     args: argparse.Namespace, load_session: Callable[[argparse.Namespace], Any]
 ) -> int:
-    session = load_session(args)
-    if session is None:
+    probe = ImportSession()
+    inspections = [probe.inspect(path, args.sheet) for path in args.files]
+    missing = {i.source_file: i.mapping.missing_required(probe.schema) for i in inspections}
+    mode = suggest_mode(missing) if args.mode == "auto" else args.mode
+
+    if mode == "banking":
+        if args.key or args.group_by:
+            print(
+                "Note : --key et --group-by ne s'appliquent qu'au mode générique ; le mode bancaire utilise sa configuration."
+            )
+        session = load_session(args)
+        if session is None:
+            return EXIT_NEEDS_CONFIRMATION
+        store = _workspace(args).create_session(session, args.name, "banking")
+        _print_created(store)
+        return EXIT_OK
+
+    if args.mode == "auto":
+        absent = sorted({f for fields in missing.values() for f in fields})
+        print(
+            f"Mode générique retenu : ces fichiers ne contiennent pas tous les champs bancaires ({', '.join(absent)})."
+        )
+    generic = infer_generic_schema([i.raw for i in inspections]).with_options(args.required)
+    key_fields = [generic.resolve(k) for k in args.key]
+    group_by = [generic.resolve(g) for g in args.group_by]
+    if not args.accept_proposed:
+        print_generic_schema(generic)
+        print("\nLe schéma déduit doit être confirmé : relancez avec --accept-proposed.")
+        print(
+            "Options : --key COLONNE (clé d'unicité), --required COLONNE, --group-by COLONNE, --rules FICHIER.yaml"
+        )
         return EXIT_NEEDS_CONFIRMATION
-    store = _workspace(args).create_session(session, args.name)
-    print(f"\nSession créée : {store.session_id}")
-    print(f"  {store.metadata['rows']} enregistrements ; instantané original en lecture seule")
-    print(f"  empreinte SHA-256 : {store.metadata['original_sha256'][:16]}…")
-    print(f"  dossier : {store.directory}")
-    print(f"\nÉtape suivante : sidadr analyze {store.session_id}")
+    session = ImportSession(schema=generic.schema)
+    for inspection in inspections:
+        session.add(inspection, generic.mappings[inspection.source_file].confirm(generic.schema))
+    options: dict[str, Any] = {"key_fields": key_fields, "group_by": group_by}
+    if args.rules:
+        options["rules_path"] = str(Path(args.rules).resolve())
+    store = _workspace(args).create_session(session, args.name, "generic", options)
+    print_generic_schema(generic)
+    _print_created(store)
     return EXIT_OK
 
 
@@ -75,7 +129,15 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     service = _service(args)
     frame = service.working_frame()
     overrides = {"reference_date": args.reference_date} if args.reference_date else None
-    result = analyze(frame, service.schema, rules_path=args.rules, rule_overrides=overrides)
+    store = service.store
+    result = analyze(
+        frame,
+        service.schema,
+        rules_path=args.rules,
+        rule_overrides=overrides,
+        mode=store.mode,
+        options=store.options,
+    )
     records = findings_to_records(result.findings(), service.decisions())
     save_findings(service.store.findings_path, records)
     save_summary(service.store.summary_path, summarize(result, records, len(service.history())))
@@ -294,6 +356,27 @@ def register(
     p = session_parser("session-create", "importer des fichiers et créer une session de travail")
     add_import_options(p)
     p.add_argument("--name", help="nom lisible de la session")
+    p.add_argument(
+        "--mode",
+        choices=["auto", "banking", "generic"],
+        default="auto",
+        help="auto : bancaire si les fichiers couvrent le schéma bancaire, sinon générique",
+    )
+    p.add_argument(
+        "--key", action="append", default=[], help="(générique) colonne identifiant, répétable"
+    )
+    p.add_argument(
+        "--required", action="append", default=[], help="(générique) colonne obligatoire, répétable"
+    )
+    p.add_argument(
+        "--group-by",
+        action="append",
+        default=[],
+        help="(générique) colonne de regroupement des anomalies",
+    )
+    p.add_argument(
+        "--rules", type=Path, help="(générique) règles YAML écrites sur les noms de colonnes"
+    )
     p.set_defaults(func=lambda a: cmd_session_create(a, load_session))
 
     session_parser("sessions", "lister les sessions").set_defaults(func=cmd_sessions)

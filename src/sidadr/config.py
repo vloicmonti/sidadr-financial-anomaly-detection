@@ -355,3 +355,42 @@ def load_anomaly_settings(
     if settings.robust_z_threshold <= 0 or settings.iqr_k <= 0 or settings.min_group_size < 5:
         raise ConfigError("anomalies.yaml : seuils positifs et min_group_size >= 5 requis.")
     return settings
+
+
+# --------------------------------------------------------------------------- sérialisation du schéma
+
+
+def schema_to_dict(schema: Schema) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": f.name,
+            "label": f.label,
+            "type": f.type,
+            "required": f.required,
+            "values": list(f.values),
+        }
+        for f in schema.fields
+    ]
+
+
+def schema_from_dict(raw: list[dict[str, Any]]) -> Schema:
+    fields = []
+    for spec in raw:
+        ftype = spec.get("type")
+        if ftype not in _FIELD_TYPES:
+            raise ConfigError(
+                f"Schéma de session : type inconnu {ftype!r} pour {spec.get('name')!r}."
+            )
+        fields.append(
+            FieldSpec(
+                name=str(spec["name"]),
+                label=str(spec.get("label", spec["name"])),
+                type=cast(FieldType, ftype),
+                required=bool(spec.get("required", False)),
+                synonyms=(),
+                values=tuple(str(v) for v in spec.get("values", [])),
+            )
+        )
+    if not fields:
+        raise ConfigError("Schéma de session vide.")
+    return Schema(tuple(fields))

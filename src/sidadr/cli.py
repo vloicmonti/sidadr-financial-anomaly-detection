@@ -43,6 +43,7 @@ from sidadr.cross_entity import (
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
 from sidadr.deduplication.detector import _SEVERITY as _KIND_SEVERITY
 from sidadr.ingestion import ImportRejected, ImportSession, Inspection, MappingError
+from sidadr.ingestion.generic import infer_generic_schema, suggest_mode
 from sidadr.name_matching import (
     WARNING,
     Category,
@@ -168,8 +169,28 @@ def _json_default(value: object) -> Any:
 
 def cmd_inspect(args: argparse.Namespace) -> int:
     session = ImportSession()
-    for path in args.files:
-        _print_inspection(session.inspect(path, args.sheet), session)
+    inspections = [session.inspect(path, args.sheet) for path in args.files]
+    missing = {i.source_file: i.mapping.missing_required(session.schema) for i in inspections}
+    mode = suggest_mode(missing)
+    if mode == "banking":
+        for inspection in inspections:
+            _print_inspection(inspection, session)
+        print("\nMode suggéré : bancaire (tous les champs bancaires obligatoires sont présents).")
+        return EXIT_OK
+    for inspection in inspections:
+        raw = inspection.raw
+        print(
+            f"\n=== {raw.source_file} : {raw.n_rows} lignes, {len(raw.headers)} colonnes, {len(raw.rejected)} rejetées"
+        )
+        for warning in raw.warnings:
+            print(f"  Avertissement : {warning}")
+    cli_session.print_generic_schema(infer_generic_schema([i.raw for i in inspections]))
+    print(
+        "\nMode suggéré : générique (les champs bancaires obligatoires ne sont pas tous présents)."
+    )
+    print(
+        "Créer la session : sidadr session-create FICHIERS --accept-proposed [--key COLONNE] [--required COLONNE]"
+    )
     return EXIT_OK
 
 

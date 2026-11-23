@@ -260,3 +260,21 @@ Limites : prototype mono-utilisateur sans authentification. L'auteur est déclar
 | 12–14 | Sécurité, perf, docs, captures, publication | 2–3 j | 11 |
 
 Total indicatif : **22 à 30 jours de travail effectif**. Avec le M2 en parallèle, la v0.1 moteur (phases 2–10) est réaliste avant la mi-décembre ; l'interface complète vers fin janvier. La v0.1 est publiable seule et constitue déjà une preuve Data Engineering défendable.
+
+
+---
+
+## Mode générique (Phase 12, première étape)
+
+**Objectif** : accepter n'importe quel fichier tabulaire, pas seulement des opérations bancaires.
+
+- **Schéma déduit** (`src/sidadr/ingestion/generic.py`) : chaque en-tête devient un champ au nom technique stable (`Date d'opération` → `date_d_operation`). Le type est retenu si au moins 80 % des valeurs renseignées le respectent (date, nombre), sinon texte. Une colonne numérique dont le nom évoque un identifiant (`id`, `code`, `n°`, `siret`, `matricule`, `tel`…) ou qui contient des zéros en tête reste du texte : on ne calcule ni moyenne ni anomalie sur un numéro.
+- **Plusieurs fichiers** : les colonnes de même nom normalisé forment un seul champ ; une colonne absente d'un fichier y est vide.
+- **Rien d'obligatoire par défaut** : l'utilisateur désigne les champs obligatoires (`--required`), la clé d'unicité (`--key`), le regroupement des anomalies (`--group-by`) et, s'il le souhaite, un fichier de règles écrit sur les noms de colonnes (`--rules`).
+- **Score** : sans champ obligatoire, la complétude porte sur toutes les colonnes ; sans fichier de règles, la cohérence est « non évaluée » (et non pas 100 %), et le rapport le dit.
+- **Persistance** : le mode, le schéma et les options sont enregistrés dans la session ; les corrections sont contrôlées selon les types déduits.
+- **Choix automatique** : mode bancaire si chaque fichier couvre les champs bancaires obligatoires, sinon générique.
+
+Vérifié sur des fichiers non bancaires (factures fournisseurs en CSV, fichier RH en XLSX, stock via l'API) : lignes et identifiants en double, champ obligatoire manquant, date impossible et montants atypiques sont retrouvés.
+
+**Reste à faire (étapes suivantes)** : correspondance des valeurs (`DEPOT` → `DEPOSIT`) et référentiels chargés par session pour le mode bancaire ; formats `.xls`, `.ods` et classeurs à plusieurs feuilles ; dates moins courantes (`20250401`, « 1 avril 2025 ») ; correction manuelle du type déduit d'une colonne.

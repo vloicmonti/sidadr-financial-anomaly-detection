@@ -22,7 +22,7 @@ from enum import StrEnum
 
 import pandas as pd
 
-from sidadr.config import Schema, default_schema
+from sidadr.config import Schema
 from sidadr.ingestion.values import DateStatus, parse_date, parse_decimal
 from sidadr.storage import SessionStore
 
@@ -78,7 +78,7 @@ class CorrectionService:
         clock: Callable[[], str] | None = None,
     ) -> None:
         self.store = store
-        self.schema = schema or default_schema()
+        self.schema = schema or store.schema()
         self.actor = actor or getpass.getuser()
         self.clock = clock or (lambda: datetime.now(UTC).isoformat(timespec="seconds"))
         self._original = store.original_frame()

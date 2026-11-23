@@ -18,8 +18,10 @@ from typing import Any
 import pandas as pd
 
 from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
-from sidadr.business_rules import RuleReport, evaluate_rules, load_rules
+from sidadr.business_rules import Rule, RuleReport, RuleSet, evaluate_rules, load_rules
 from sidadr.config import (
+    AnomalySettings,
+    DuplicateSettings,
     Schema,
     Settings,
     default_schema,
@@ -31,7 +33,7 @@ from sidadr.config import (
 )
 from sidadr.cross_entity import EntityReport, group_entities
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
-from sidadr.findings import Finding
+from sidadr.findings import Finding, Severity
 from sidadr.name_matching import MatchReport, match_names
 from sidadr.profiling import DatasetProfile, QualityScore, compute_score, profile_frame
 
@@ -52,19 +54,39 @@ class AnalysisResult:
     profile: DatasetProfile
     score: QualityScore
     duplicates: DuplicateReport
-    names: MatchReport
-    entities: EntityReport
+    names: MatchReport | None  # mode bancaire uniquement
+    entities: EntityReport | None  # mode bancaire uniquement
     anomalies: AnomalyReport
     rules: RuleReport
+    mode: str = "banking"
 
     def findings(self) -> list[Finding]:
         return [
             *self.rules.findings(),
             *self.duplicates.findings(),
             *self.anomalies.findings(),
-            *self.names.findings(),
-            *self.entities.findings(),
+            *(self.names.findings() if self.names else []),
+            *(self.entities.findings() if self.entities else []),
         ]
+
+
+def _generic_rules(schema: Schema) -> RuleSet:
+    """Règles par défaut du mode générique : seuls les champs désignés obligatoires sont contrôlés."""
+    required = tuple(f.name for f in schema.fields if f.required)
+    rules: tuple[Rule, ...] = ()
+    if required:
+        rules = (
+            Rule(
+                rule_id="R-MANDATORY",
+                description="Les champs désignés obligatoires doivent être renseignés",
+                fields=required,
+                op="not_null",
+                severity=Severity.CERTAIN_ERROR,
+                recommendation="Compléter la valeur depuis la source ; ne pas l'inventer.",
+                dimension="completeness",
+            ),
+        )
+    return RuleSet(rules, {}, Path("(règles par défaut du mode générique)"))
 
 
 def analyze(
@@ -73,10 +95,38 @@ def analyze(
     settings: Settings | None = None,
     rules_path: Path | None = None,
     rule_overrides: dict[str, Any] | None = None,
+    mode: str = "banking",
+    options: dict[str, Any] | None = None,
 ) -> AnalysisResult:
+    """Analyse complète. En mode générique, les détecteurs propres aux opérations bancaires
+    (noms de clients, multi-banques, règles bancaires) ne sont pas lancés."""
     schema = schema or default_schema()
     settings = settings or default_settings()
+    options = options or {}
     profile = profile_frame(frame, schema, settings)
+
+    if mode == "generic":
+        key_fields = tuple(str(f) for f in options.get("key_fields", []))
+        duplicates = detect_duplicates(frame, DuplicateSettings(key_fields, False, ()), schema)
+        numeric = tuple(f.name for f in schema.fields if f.type == "decimal")
+        group_by = tuple(str(f) for f in options.get("group_by", []))
+        anomalies = detect_anomalies(
+            frame, dataclasses.replace(AnomalySettings(), fields=numeric, group_by=group_by), schema
+        )
+        user_rules = rules_path or (
+            Path(options["rules_path"]) if options.get("rules_path") else None
+        )
+        ruleset = (
+            load_rules(user_rules, schema, rule_overrides) if user_rules else _generic_rules(schema)
+        )
+        rules = evaluate_rules(frame, ruleset, schema)
+        score = compute_score(
+            profile,
+            duplicate_rows=duplicates.rows_involved(KEY_LEVELS),
+            rule_violation_rows=rules.rows_violating("consistency") if user_rules else None,
+        )
+        return AnalysisResult(profile, score, duplicates, None, None, anomalies, rules, mode)
+
     duplicates = detect_duplicates(frame, load_duplicate_settings(schema=schema), schema)
     names = match_names(frame, load_matching_settings(), schema)
     entities = group_entities(names, load_cross_entity_settings())
@@ -87,7 +137,7 @@ def analyze(
         duplicate_rows=duplicates.rows_involved(KEY_LEVELS),
         rule_violation_rows=rules.rows_violating("consistency"),
     )
-    return AnalysisResult(profile, score, duplicates, names, entities, anomalies, rules)
+    return AnalysisResult(profile, score, duplicates, names, entities, anomalies, rules, mode)
 
 
 def findings_to_records(findings: list[Finding], decisions: dict[str, str]) -> list[dict[str, Any]]:
@@ -131,6 +181,7 @@ def summarize(
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "sidadr_version": __version__,
+        "mode": result.mode,
         "rows_analyzed": result.profile.n_rows,
         "journal_entries_at_analysis": journal_entries,
         "score": dataclasses.asdict(result.score),

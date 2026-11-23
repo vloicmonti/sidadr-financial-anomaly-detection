@@ -13,7 +13,7 @@ import shutil
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
@@ -37,6 +37,8 @@ from sidadr.correction import CorrectionError, CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
 from sidadr.ingestion import ImportRejected, ImportSession, MappingError
+from sidadr.ingestion.generic import infer_generic_schema, suggest_mode
+from sidadr.ingestion.readers import RawTable
 from sidadr.reporting import build_traceability
 from sidadr.reporting.html_report import render_report
 from sidadr.storage import Workspace, WorkspaceError
@@ -53,6 +55,11 @@ class SessionCreate(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     # Corrections de correspondance : {fichier: {colonne: champ ou null}}. La création vaut confirmation.
     mappings: dict[str, dict[str, str | None]] = Field(default_factory=dict)
+    # auto : mode bancaire si chaque fichier couvre les champs bancaires obligatoires, sinon générique.
+    mode: Literal["auto", "banking", "generic"] = "auto"
+    key_fields: list[str] = Field(default_factory=list, max_length=10)
+    required_fields: list[str] = Field(default_factory=list, max_length=200)
+    group_by: list[str] = Field(default_factory=list, max_length=5)
 
 
 class DecisionIn(BaseModel):
@@ -179,7 +186,9 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         target.mkdir(parents=True)
         limit = int(settings.imports.max_file_mb * 1024 * 1024)
         session = ImportSession()
-        inspections = []
+        inspections: list[dict[str, Any]] = []
+        raws: list[RawTable] = []
+        missing: dict[str, list[str]] = {}
         try:
             for item in files:
                 name = _SAFE_NAME.sub("_", Path(item.filename or "fichier").name)[:120] or "fichier"
@@ -192,6 +201,8 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
                 path.write_bytes(data)
                 inspection = session.inspect(path)
                 raw = inspection.raw
+                raws.append(raw)
+                missing[raw.source_file] = inspection.mapping.missing_required(session.schema)
                 inspections.append(
                     {
                         "file": raw.source_file,
@@ -224,21 +235,57 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
         except Exception:
             shutil.rmtree(target, ignore_errors=True)
             raise
-        return {"upload_id": upload_id, "files": inspections}
+        generic = infer_generic_schema(raws)
+        return {
+            "upload_id": upload_id,
+            "files": inspections,
+            "suggested_mode": suggest_mode(missing),
+            "generic_fields": [
+                {
+                    "name": f.name,
+                    "label": f.label,
+                    "type": f.type,
+                    "filled": f.filled,
+                    "conformity": round(f.conformity, 3),
+                    "sources": list(f.sources),
+                    "reason": f.reason,
+                }
+                for f in generic.fields
+            ],
+        }
 
     @app.post("/api/sessions", status_code=201)
     def create_session(payload: SessionCreate) -> dict[str, Any]:
         source = uploads / payload.upload_id
         if not source.is_dir():
             raise HTTPException(404, "Téléversement introuvable ou expiré : recommencez l'import.")
-        session = ImportSession()
-        for path in sorted(p for p in source.iterdir() if p.is_file()):
-            inspection = session.inspect(path)
-            mapping = inspection.mapping.confirm(
-                session.schema, payload.mappings.get(inspection.source_file)
+        probe = ImportSession()
+        inspections = [probe.inspect(p) for p in sorted(p for p in source.iterdir() if p.is_file())]
+        missing = {i.source_file: i.mapping.missing_required(probe.schema) for i in inspections}
+        mode = suggest_mode(missing) if payload.mode == "auto" else payload.mode
+        if mode == "banking":
+            for inspection in inspections:
+                probe.add(
+                    inspection,
+                    inspection.mapping.confirm(
+                        probe.schema, payload.mappings.get(inspection.source_file)
+                    ),
+                )
+            store = workspace.create_session(probe, payload.name, "banking")
+        else:
+            generic = infer_generic_schema([i.raw for i in inspections]).with_options(
+                payload.required_fields
             )
-            session.add(inspection, mapping)
-        store = workspace.create_session(session, payload.name)
+            session = ImportSession(schema=generic.schema)
+            for inspection in inspections:
+                session.add(
+                    inspection, generic.mappings[inspection.source_file].confirm(generic.schema)
+                )
+            options = {
+                "key_fields": [generic.resolve(k) for k in payload.key_fields],
+                "group_by": [generic.resolve(g) for g in payload.group_by],
+            }
+            store = workspace.create_session(session, payload.name, "generic", options)
         shutil.rmtree(source, ignore_errors=True)
         return state(CorrectionService(store))
 
@@ -255,7 +302,9 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
     @app.post("/api/sessions/{session_id}/analyze")
     def run_analysis(session_id: str) -> dict[str, Any]:
         svc = service(session_id)
-        result = analyze(svc.working_frame(), svc.schema)
+        result = analyze(
+            svc.working_frame(), svc.schema, mode=svc.store.mode, options=svc.store.options
+        )
         records = findings_to_records(result.findings(), svc.decisions())
         save_findings(svc.store.findings_path, records)
         summary = summarize(result, records, len(svc.history()))

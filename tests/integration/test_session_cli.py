@@ -123,3 +123,28 @@ def test_exports_and_report(session: tuple[Path, str], tmp_path: Path) -> None:
     assert (tmp_path / f"sidadr_{session_id}.xlsx").exists()
     assert (tmp_path / f"sidadr_{session_id}.meta.json").exists()
     assert "Score qualité" in report.read_text(encoding="utf-8")
+
+
+def test_session_create_switches_to_generic_mode_automatically(tmp_path: Path) -> None:
+    path = tmp_path / "ventes.csv"
+    path.write_text(
+        "Ref;Client;Montant\n"
+        + "".join(f"V{i};C{i % 9};{100 + i}\n" for i in range(50))
+        + "V1;C1;101\n",
+        encoding="utf-8",
+    )
+    workspace = ["--workspace", str(tmp_path / "ws")]
+    assert (
+        main(["session-create", str(path), *workspace]) == 2
+    )  # le schéma déduit doit être confirmé
+    assert main(["session-create", str(path), "--accept-proposed", "--key", "Ref", *workspace]) == 0
+    (session_id,) = [p.name for p in (tmp_path / "ws" / "sessions").iterdir()]
+    assert main(["analyze", session_id, *workspace]) == 0
+    findings = json.loads(
+        (tmp_path / "ws" / "sessions" / session_id / "findings.json").read_text(encoding="utf-8")
+    )
+    assert [f["kind"] for f in findings] == ["exact_duplicate_row"]
+    assert (
+        main(["session-create", str(path), "--accept-proposed", "--key", "Inconnue", *workspace])
+        == 1
+    )

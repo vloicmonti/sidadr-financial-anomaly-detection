@@ -28,6 +28,26 @@ SIDADR **signale, l'humain décide** : aucun détecteur ne supprime, ne fusionne
 | Corrections | original immuable, corrections et décisions réversibles, journal d'audit chaîné | `sidadr correct`, `decide`, `undo`, `history` |
 | Exports | CSV / XLSX avec fiche de traçabilité, rapport qualité HTML autonome | `sidadr export`, `sidadr report` |
 
+### Deux modes : n'importe quel fichier, ou des opérations bancaires
+
+| | Mode **générique** | Mode **bancaire** |
+|---|---|---|
+| Fichiers acceptés | tout tableau CSV ou XLSX (factures, RH, stocks, ventes…) | opérations bancaires couvrant les 10 champs du schéma |
+| Schéma | déduit des fichiers : chaque colonne devient un champ, type détecté (date, nombre, texte ; un numéro ou un code reste du texte) | schéma bancaire fixe, colonnes reconnues par synonymes |
+| Profil, score, validité des dates et nombres | oui | oui |
+| Doublons | lignes identiques, et identifiants en double si une **clé** est désignée (`--key`) | identifiant d'opération, inter-fichiers, combinaisons |
+| Valeurs atypiques | sur **toutes** les colonnes numériques, regroupables (`--group-by`) | montants par type d'opération et devise |
+| Règles | champs obligatoires désignés (`--required`) ; règles YAML sur les noms de colonnes (`--rules`) | 7 règles bancaires |
+| Noms similaires, clients multi-banques | — | oui |
+| Corrections, journal, exports, rapport | oui | oui |
+
+Le mode est choisi automatiquement à la création de la session : bancaire si chaque fichier couvre le schéma bancaire, générique sinon (forçable avec `--mode`). Un fichier qui n'a pas la forme attendue n'est donc plus refusé.
+
+```powershell
+.venv\Scripts\sidadr inspect factures.csv
+.venv\Scripts\sidadr session-create factures.csv --accept-proposed --key "N° facture" --required Fournisseur --group-by Pays
+```
+
 Chaque constat porte une **sévérité** explicite : *erreur certaine*, *incohérence probable*, *valeur atypique* ou *alerte à examiner*. Une similarité de nom n'est jamais présentée comme une identité, une valeur atypique jamais comme une erreur ni comme une fraude.
 
 ## Résultats mesurés
