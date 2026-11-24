@@ -132,6 +132,18 @@ describe("écran des corrections", () => {
     await waitFor(() => expect(calls.some((c) => c.url.includes("include_excluded=true"))).toBe(true));
   });
 
+  it("reste utilisable avec un moteur lancé avant les indicateurs exclu et champs corrigés", async () => {
+    const old = ROWS.map(({ excluded: _e, corrected_fields: _c, ...rest }) => rest);
+    mockApi({
+      "/api/sessions/S1/records": new Response(JSON.stringify({ total: 2, page: 1, page_size: 50, items: old }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    });
+    renderAt("/sessions/S1/records");
+    expect(await screen.findByRole("button", { name: "pieces:1" })).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ corrigés?$/)).not.toBeInTheDocument();
+  });
+
   it("corrige un champ avec un motif depuis la fiche", async () => {
     const calls = mockApi();
     renderAt("/sessions/S1/records?r=pieces:2");

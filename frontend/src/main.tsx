@@ -7,6 +7,7 @@ import { Link, RouterProvider, createBrowserRouter } from "react-router";
 
 import { ApiError } from "./api/client";
 import { AppShell } from "./components/AppShell";
+import { RouteError } from "./components/RouteError";
 import { EmptyState } from "./components/ui";
 import { ExportsPage } from "./pages/ExportsPage";
 import { FindingsPage } from "./pages/FindingsPage";
@@ -29,16 +30,22 @@ const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
-      { path: "/", element: <SessionsPage /> },
-      { path: "/import", element: <ImportPage /> },
-      { path: "/sessions/:sessionId", element: <OverviewPage /> },
-      { path: "/sessions/:sessionId/findings", element: <FindingsPage /> },
-      { path: "/sessions/:sessionId/findings/:view", element: <FindingsPage /> },
-      { path: "/sessions/:sessionId/records", element: <RecordsPage /> },
-      { path: "/sessions/:sessionId/history", element: <HistoryPage /> },
-      { path: "/sessions/:sessionId/quality", element: <QualityPage /> },
-      { path: "/sessions/:sessionId/exports", element: <ExportsPage /> },
-      { path: "*", element: <NotFound /> },
+      {
+        // Une page qui plante est remplacée par un écran lisible ; la barre latérale reste.
+        errorElement: <RouteError />,
+        children: [
+          { path: "/", element: <SessionsPage /> },
+          { path: "/import", element: <ImportPage /> },
+          { path: "/sessions/:sessionId", element: <OverviewPage /> },
+          { path: "/sessions/:sessionId/findings", element: <FindingsPage /> },
+          { path: "/sessions/:sessionId/findings/:view", element: <FindingsPage /> },
+          { path: "/sessions/:sessionId/records", element: <RecordsPage /> },
+          { path: "/sessions/:sessionId/history", element: <HistoryPage /> },
+          { path: "/sessions/:sessionId/quality", element: <QualityPage /> },
+          { path: "/sessions/:sessionId/exports", element: <ExportsPage /> },
+          { path: "*", element: <NotFound /> },
+        ],
+      },
     ],
   },
 ]);

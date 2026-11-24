@@ -96,7 +96,18 @@ export const api = {
       `/sessions/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/decision`,
       post({ decision, reason }),
     ),
-  records: (id: string, filters: RecordQuery) => request<RecordPage>(`${session(id)}/records?${query(filters)}`),
+  records: async (id: string, filters: RecordQuery): Promise<RecordPage> => {
+    const page = await request<RecordPage>(`${session(id)}/records?${query(filters)}`);
+    // Un moteur lancé avant ces indicateurs ne les renvoie pas : valeurs neutres plutôt qu'un plantage.
+    return {
+      ...page,
+      items: page.items.map((item) => ({
+        ...item,
+        excluded: item.excluded ?? false,
+        corrected_fields: item.corrected_fields ?? [],
+      })),
+    };
+  },
   record: (id: string, recordId: string) =>
     request<RecordDetail>(`${session(id)}/records/${encodeURIComponent(recordId)}`),
   correct: (id: string, recordId: string, field: string, value: string | null, reason: string) =>
