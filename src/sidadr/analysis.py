@@ -167,6 +167,55 @@ def load_findings(path: Path) -> list[dict[str, Any]]:
     return data
 
 
+MAX_TOP_VALUES = 5
+MAX_INVALID_SAMPLES = 20
+
+
+def profile_to_dict(profile: DatasetProfile) -> dict[str, Any]:
+    """Profil par colonne, sérialisable : ce que l'écran « Qualité des données » affiche."""
+    columns = []
+    for c in profile.columns:
+        stats = c.numeric
+        columns.append(
+            {
+                "name": c.name,
+                "label": c.label,
+                "type": c.expected_type,
+                "required": c.required,
+                "rows": c.n_rows,
+                "missing": c.missing,
+                "distinct": c.distinct,
+                "invalid": c.invalid,
+                "checked_for_validity": c.checked_for_validity,
+                "invalid_reasons": dict(c.invalid_reasons),
+                "invalid_samples": c.invalid_record_ids[:MAX_INVALID_SAMPLES],
+                "decisions": list(c.decisions),
+                "numeric": None
+                if stats is None
+                else {
+                    "count": stats.count,
+                    "min": str(stats.minimum),
+                    "q1": str(stats.q1),
+                    "median": str(stats.median),
+                    "q3": str(stats.q3),
+                    "max": str(stats.maximum),
+                    "mean": round(stats.mean, 4),
+                    "std": round(stats.std, 4),
+                },
+                "date_range": None
+                if c.date_range is None
+                else [c.date_range[0].isoformat(), c.date_range[1].isoformat()],
+                "top_values": [[v, n] for v, n in c.top_values[:MAX_TOP_VALUES]],
+            }
+        )
+    return {
+        "rows": profile.n_rows,
+        "duplicate_rows": profile.duplicate_rows,
+        "duplicate_groups": profile.duplicate_groups,
+        "columns": columns,
+    }
+
+
 def summarize(
     result: AnalysisResult, records: list[dict[str, Any]], data_changes: int
 ) -> dict[str, Any]:
@@ -186,6 +235,7 @@ def summarize(
         # Seules les modifications de données périment l'analyse ; une décision n'en est pas une.
         "data_changes_at_analysis": data_changes,
         "score": dataclasses.asdict(result.score),
+        "profile": profile_to_dict(result.profile),
         "findings": {
             "total": len(records),
             "by_severity": by("severity"),

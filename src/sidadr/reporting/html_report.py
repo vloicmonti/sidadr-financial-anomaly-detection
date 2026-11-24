@@ -212,7 +212,7 @@ def render_report(
         if trace["analysis_up_to_date"]
         else (
             '<div class="note" style="background:var(--p-bg);color:var(--p-fg)">L\'analyse est antérieure aux dernières '
-            "corrections ou décisions : relancez « sidadr analyze » pour un rapport à jour.</div>"
+            "corrections ou exclusions : relancez « sidadr analyze » pour un rapport à jour.</div>"
         )
     )
     sources = ", ".join(f"{s['source_file']} ({s['rows']} lignes)" for s in trace["sources"])

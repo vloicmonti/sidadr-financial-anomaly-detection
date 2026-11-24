@@ -180,9 +180,9 @@ PostgreSQL n'est **pas** retenu : un seul utilisateur local, aucun accès concur
 
 Sécurité : écoute sur 127.0.0.1 par défaut, CORS limité à l'origine du frontend de développement, noms de fichiers téléversés assainis, taille limitée, erreurs renvoyées en messages lisibles (422, 404, 409) sans trace technique, en-tête `Content-Security-Policy` strict sur le rapport. L'auteur des actions est transmis par l'en-tête `X-Sidadr-Actor` (déclaratif, sans authentification).
 
+**Phases 11b à 11f livrées : interface React** (`frontend/`). Vite, React 19, TypeScript strict, Tailwind CSS 4 alimenté par les jetons du design system, React Router (filtres et sélection dans l'URL), TanStack Query (cache, états de chargement et d'erreur, invalidation après chaque action), icônes Lucide. Les types de l'API sont écrits à la main dans `src/api/types.ts` ; les tests Vitest simulent l'API et la CI vérifie types, tests et build.
 
-- **FastAPI** : routes `/imports`, `/datasets/{id}/profile`, `/findings`, `/findings/{id}/decision`, `/corrections`, `/audit`, `/exports`. Schémas Pydantic partagés avec le moteur. Documentation OpenAPI générée automatiquement.
-- **Frontend** : Vite, React, TypeScript strict, Tailwind CSS, composants shadcn/ui (Radix), TanStack Table (tri, filtres, pagination, virtualisation des grands tableaux), TanStack Query (appels API, états de chargement/erreur), Recharts, icônes Lucide. Types TypeScript générés depuis le schéma OpenAPI pour éviter la dérive entre back et front.
+Écrans : sessions, import, vue d'ensemble, constats (et vues Doublons, Noms & identités, Anomalies, Règles métier), corrections, historique, qualité des données, rapports & exports. Aucune logique métier côté navigateur : toute valeur saisie est validée par le moteur, qui renvoie un message lisible en cas de refus.
 
 ## 8. Choix technologiques et compromis
 

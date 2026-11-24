@@ -4,7 +4,7 @@
 
 > **Système Intelligent de Détection des Anomalies et Duplications** dans des données financières multi-sources : import, profilage, doublons, noms similaires, clients multi-banques, valeurs atypiques, règles métier, corrections tracées et rapport qualité.
 
-**Statut : v0.1 — moteur complet, interface web en cours.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. Le moteur s'utilise en ligne de commande ou via l'interface React, dont les principaux écrans de revue sont livrés.
+**Statut : v0.1 — moteur et interface web complets.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. Le moteur s'utilise en ligne de commande ou via l'interface React.
 
 ---
 
@@ -104,7 +104,7 @@ Sous macOS ou Linux, remplacer `.venv\Scripts\` par `.venv/bin/`.
 
 Les sessions sont enregistrées dans `workspace/` (ignoré par Git), les exports dans `exports/`.
 
-### Interface web (en construction)
+### Interface web
 
 L'interface React (Vite, TypeScript strict, Tailwind) s'appuie sur l'API locale. Prérequis : Node.js 22.13 ou plus récent.
 
@@ -127,8 +127,8 @@ Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
 - **Constats** (vues Doublons, Noms & identités, Anomalies, Règles métier) : filtres, détail avec les colonnes divergentes surlignées, décision motivée.
 - **Corrections** : recherche d'enregistrements, valeur d'origine et valeur de travail champ par champ, correction validée par le moteur, exclusion, annulation.
 - **Historique** : journal d'audit filtrable, vérification du chaînage, annulation depuis le journal.
-
-Les écrans Qualité des données et Rapports & exports restent à livrer (le rapport et les exports existent déjà en ligne de commande et dans l'API).
+- **Qualité des données** : détail des dimensions du score, profil de chaque colonne (remplissage, valeurs distinctes, conformité, distribution, valeurs fréquentes, choix d'interprétation du moteur), résultat de chaque règle métier.
+- **Rapports & exports** : rapport HTML autonome, classeur XLSX et archive CSV, avec la traçabilité de la session.
 
 ## Architecture
 
@@ -184,7 +184,6 @@ Ce projet est inspiré de travaux de contrôle qualité de données financières
 - Prototype local mono-utilisateur, sans authentification ; l'auteur des actions est déclaré.
 - Seuils calibrés sur des données synthétiques.
 - Le journal d'audit détecte une falsification mais ne l'empêche pas (pas de signature externe).
-- Interface web incomplète : qualité des données, rapports et exports ne sont encore accessibles qu'en ligne de commande ou par l'API.
 
 ## Documentation
 

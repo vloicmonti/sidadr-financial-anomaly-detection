@@ -69,7 +69,7 @@ function ScoreCard({ analysis }: { analysis: AnalysisSummary }) {
                   <b className="font-semibold tabular-nums">
                     {formatPercent(d.value)}
                     <small className="ml-1.5 font-normal text-ink-3">
-                      {formatNumber(d.numerator)} / {formatNumber(d.denominator)}
+                      {formatNumber(d.numerator)} en défaut sur {formatNumber(d.denominator)}
                     </small>
                   </b>
                 )}

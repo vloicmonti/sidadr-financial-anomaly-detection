@@ -70,6 +70,19 @@ def test_session_state(client: TestClient, session_id: str) -> None:
     assert session_id in [s["session_id"] for s in client.get("/api/sessions").json()]
 
 
+def test_analysis_keeps_the_column_profile(client: TestClient, session_id: str) -> None:
+    profile = client.get(f"/api/sessions/{session_id}").json()["analysis"]["profile"]
+    columns = {c["name"]: c for c in profile["columns"]}
+    amount, txn_date = columns["amount"], columns["transaction_date"]
+    assert profile["rows"] == amount["rows"] > 1000
+    assert amount["numeric"] is not None and float(amount["numeric"]["min"]) <= float(
+        amount["numeric"]["max"]
+    )
+    assert txn_date["date_range"] is not None and txn_date["checked_for_validity"] is True
+    assert 0 < len(columns["bank_code"]["top_values"]) <= 5
+    assert all(len(c["invalid_samples"]) <= 20 for c in profile["columns"])
+
+
 def test_findings_filters_facets_and_pagination(client: TestClient, session_id: str) -> None:
     all_ = client.get(f"/api/sessions/{session_id}/findings", params={"page_size": 10}).json()
     assert all_["total"] > 10 and len(all_["items"]) == 10

@@ -25,7 +25,7 @@ import { cn, formatNumber } from "../lib";
 interface NavItem {
   label: string;
   icon: LucideIcon;
-  to?: (sessionId: string) => string; // absent : écran pas encore livré
+  to: (sessionId: string) => string;
 }
 
 const SESSION_NAV: { group: string; items: NavItem[] }[] = [
@@ -36,7 +36,7 @@ const SESSION_NAV: { group: string; items: NavItem[] }[] = [
       { label: "Tous les constats", icon: SearchCheck, to: (id) => `/sessions/${id}/findings` },
     ],
   },
-  { group: "Données", items: [{ label: "Qualité des données", icon: Gauge }] },
+  { group: "Données", items: [{ label: "Qualité des données", icon: Gauge, to: (id) => `/sessions/${id}/quality` }] },
   {
     group: "Détection",
     items: [
@@ -53,7 +53,7 @@ const SESSION_NAV: { group: string; items: NavItem[] }[] = [
       { label: "Historique", icon: History, to: (id) => `/sessions/${id}/history` },
     ],
   },
-  { group: "Sorties", items: [{ label: "Rapports & exports", icon: Download }] },
+  { group: "Sorties", items: [{ label: "Rapports & exports", icon: Download, to: (id) => `/sessions/${id}/exports` }] },
 ];
 
 const ITEM = "flex items-center gap-2.5 rounded-md px-2.5 py-[7px] font-medium transition-colors";
@@ -99,32 +99,19 @@ function Sidebar() {
           ? SESSION_NAV.map(({ group, items }) => (
               <div key={group}>
                 <p className="px-2.5 pt-4.5 pb-1.5 text-xs font-medium text-ink-3">{group}</p>
-                {items.map(({ label, icon: Icon, to }) =>
-                  to ? (
-                    <NavLink
-                      key={label}
-                      to={to(sessionId)}
-                      end
-                      className={({ isActive }) =>
-                        cn(ITEM, isActive ? "bg-brand-100 text-primary" : "text-ink-2 hover:bg-subtle hover:text-ink")
-                      }
-                    >
-                      <Icon aria-hidden className="size-4" />
-                      {label}
-                    </NavLink>
-                  ) : (
-                    <span
-                      key={label}
-                      aria-disabled="true"
-                      title="Écran livré à l'étape suivante"
-                      className={cn(ITEM, "cursor-default text-ink-3")}
-                    >
-                      <Icon aria-hidden className="size-4" />
-                      {label}
-                      <span className="ml-auto text-[11px] font-normal">bientôt</span>
-                    </span>
-                  ),
-                )}
+                {items.map(({ label, icon: Icon, to }) => (
+                  <NavLink
+                    key={label}
+                    to={to(sessionId)}
+                    end
+                    className={({ isActive }) =>
+                      cn(ITEM, isActive ? "bg-brand-100 text-primary" : "text-ink-2 hover:bg-subtle hover:text-ink")
+                    }
+                  >
+                    <Icon aria-hidden className="size-4" />
+                    {label}
+                  </NavLink>
+                ))}
               </div>
             ))
           : null}

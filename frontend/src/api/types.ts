@@ -52,8 +52,10 @@ export interface AnalysisSummary {
   generated_at: string;
   sidadr_version: string;
   rows_analyzed: number;
-  journal_entries_at_analysis: number;
+  mode?: SessionMode;
   score: QualityScore;
+  /** Absent des analyses antérieures à l'écran « Qualité des données ». */
+  profile?: DataProfile;
   findings: {
     total: number;
     by_severity: Partial<Record<Severity, number>>;
@@ -249,4 +251,29 @@ export interface AuditEntry {
 export interface History {
   entries: AuditEntry[];
   integrity: { entries: number; valid: boolean; first_broken_entry: number | null };
+}
+
+export interface ColumnProfile {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  rows: number;
+  missing: number;
+  distinct: number;
+  invalid: number;
+  checked_for_validity: boolean;
+  invalid_reasons: Record<string, number>;
+  invalid_samples: string[];
+  decisions: string[];
+  numeric: { count: number; min: string; q1: string; median: string; q3: string; max: string; mean: number; std: number } | null;
+  date_range: [string, string] | null;
+  top_values: [string, number][];
+}
+
+export interface DataProfile {
+  rows: number;
+  duplicate_rows: number;
+  duplicate_groups: number;
+  columns: ColumnProfile[];
 }
