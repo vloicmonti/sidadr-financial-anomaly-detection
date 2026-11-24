@@ -18,7 +18,7 @@ SIDADR **signale, l'humain décide** : aucun détecteur ne supprime, ne fusionne
 
 | Module | Rôle | Commande |
 |---|---|---|
-| Import | CSV et XLSX hétérogènes, détection d'encodage et de séparateur, correspondance des colonnes **confirmée par l'utilisateur**, contrôles de sécurité | `sidadr inspect` |
+| Import | CSV, XLSX, XLS et ODS hétérogènes, détection d'encodage et de séparateur, correspondance des colonnes **confirmée par l'utilisateur**, contrôles de sécurité | `sidadr inspect` |
 | Profilage | complétude, validité, statistiques, score qualité explicable sur 4 dimensions | `sidadr profile` |
 | Doublons exacts | lignes identiques, identifiants en double, doublons inter-fichiers, combinaisons de champs | `sidadr duplicates` |
 | Noms similaires | 5 stratégies (RapidFuzz), corroboration par date de naissance et téléphone, 3 niveaux de similarité | `sidadr names` |
@@ -32,7 +32,7 @@ SIDADR **signale, l'humain décide** : aucun détecteur ne supprime, ne fusionne
 
 | | Mode **générique** | Mode **bancaire** |
 |---|---|---|
-| Fichiers acceptés | tout tableau CSV ou XLSX (factures, RH, stocks, ventes…) | opérations bancaires couvrant les 10 champs du schéma |
+| Fichiers acceptés | tout tableau CSV, XLSX, XLS ou ODS (factures, RH, stocks, ventes…), types de colonnes corrigeables à l'import | opérations bancaires couvrant les 10 champs du schéma |
 | Schéma | déduit des fichiers : chaque colonne devient un champ, type détecté (date, nombre, texte ; un numéro ou un code reste du texte) | schéma bancaire fixe, colonnes reconnues par synonymes |
 | Profil, score, validité des dates et nombres | oui | oui |
 | Doublons | lignes identiques, et identifiants en double si une **clé** est désignée (`--key`) | identifiant d'opération, inter-fichiers, combinaisons |
@@ -122,7 +122,7 @@ npm run dev
 
 Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
 
-- **Sessions** et **import** : glisser-déposer, aperçu, mode suggéré, configuration du mode générique ou correspondance bancaire.
+- **Sessions** et **import** : glisser-déposer (CSV, XLSX, XLS, ODS), aperçu, mode suggéré, configuration du mode générique (clé, champs obligatoires, regroupement, type de chaque colonne) ou correspondance bancaire.
 - **Vue d'ensemble** : analyse, score de qualité, constats par sévérité, état de la revue.
 - **Constats** (vues Doublons, Noms & identités, Anomalies, Règles métier) : filtres, détail avec les colonnes divergentes surlignées, décision motivée.
 - **Corrections** : recherche d'enregistrements, valeur d'origine et valeur de travail champ par champ, correction validée par le moteur, exclusion, annulation.
@@ -134,7 +134,7 @@ Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
 
 ```mermaid
 flowchart LR
-    F[CSV / XLSX] --> I[Import<br/>correspondance confirmée]
+    F[CSV / XLSX / XLS / ODS] --> I[Import<br/>correspondance confirmée]
     I --> S[(Instantané original<br/>Parquet, lecture seule)]
     S --> W[Vue de travail<br/>original + corrections]
     W --> D[Détecteurs<br/>profil · doublons · noms<br/>multi-banques · atypiques · règles]

@@ -92,6 +92,32 @@ def test_required_fields_and_resolution(tmp_path: Path) -> None:
         marked.resolve("Inexistante")
 
 
+def test_types_chosen_at_import_override_inference(tmp_path: Path) -> None:
+    text = (
+        "Code postal;Quantité;Livraison\n"
+        "01000;3;2025-01-02\n"
+        "75001;beaucoup;bientôt\n"
+        "13001;5;2025-03-04\n"
+    )
+    raw = read_table(_write(tmp_path, "f.csv", text), ImportSettings())
+    generic = infer_generic_schema([raw])
+    assert [f.type for f in generic.schema.fields] == ["text", "text", "text"]
+
+    chosen = generic.with_options(types={"Quantité": "decimal", "livraison": "date"})
+    assert [f.type for f in chosen.schema.fields] == ["text", "decimal", "date"]
+    assert {f.name: f.reason for f in chosen.fields}["quantite"] == "type choisi à l'import"
+    with pytest.raises(MappingError, match="non disponible"):
+        generic.with_options(types={"Quantité": "enum"})
+
+    # Une valeur non conforme au type imposé est conservée et signalée, jamais écartée.
+    session = ImportSession(schema=chosen.schema)
+    inspection = session.inspect(tmp_path / "f.csv")
+    session.add(inspection, chosen.mappings["f.csv"].confirm(chosen.schema))
+    result = analyze(session.frame, chosen.schema, mode="generic")
+    quantity = result.profile["quantite"]
+    assert len(session.frame) == 3 and quantity.invalid == 1 and quantity.filled == 3
+
+
 def test_mode_suggestion() -> None:
     assert suggest_mode({"a.csv": [], "b.csv": []}) == "banking"
     assert suggest_mode({"a.csv": [], "b.csv": ["amount"]}) == "generic"

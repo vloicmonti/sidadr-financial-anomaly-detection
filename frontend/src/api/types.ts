@@ -105,7 +105,7 @@ export interface MappingProposal {
 
 export interface FileInspection {
   file: string;
-  kind: "csv" | "xlsx";
+  kind: "csv" | "xlsx" | "xls" | "ods";
   encoding: string | null;
   delimiter: string | null;
   sheet: string | null;
@@ -145,7 +145,12 @@ export interface SessionCreate {
   key_fields?: string[];
   required_fields?: string[];
   group_by?: string[];
+  /** Types imposés en mode générique, par nom de champ. */
+  types?: Record<string, OverridableType>;
 }
+
+/** Types qu'on peut imposer à une colonne à l'import (une liste de valeurs exigerait ses valeurs). */
+export type OverridableType = "text" | "decimal" | "date";
 
 export interface Finding {
   finding_id: string;

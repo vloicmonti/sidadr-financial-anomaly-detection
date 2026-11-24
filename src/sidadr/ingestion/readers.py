@@ -1,4 +1,4 @@
-"""Lecture sécurisée des fichiers CSV et XLSX vers une table brute de chaînes.
+"""Lecture sécurisée des fichiers CSV, XLSX, XLS et ODS vers une table brute de chaînes.
 
 Toutes les valeurs sont lues comme du texte, sans interprétation : l'inférence de
 types se fait ensuite (module `values`), colonne par colonne, de façon explicable.
@@ -15,6 +15,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 from typing import Literal
 
+import pandas as pd
 from openpyxl import load_workbook
 
 from sidadr.config import ImportSettings
@@ -23,7 +24,10 @@ from sidadr.ingestion.errors import ImportRejected
 CANDIDATE_DELIMITERS: tuple[str, ...] = (";", ",", "\t", "|")
 CANDIDATE_ENCODINGS: tuple[str, ...] = ("utf-8-sig", "cp1252")
 
-FileKind = Literal["csv", "xlsx"]
+FileKind = Literal["csv", "xlsx", "xls", "ods"]
+
+OLE2_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # anciens fichiers Office (.xls)
+ODS_MIMETYPE = b"application/vnd.oasis.opendocument.spreadsheet"
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,20 @@ def check_file(path: Path, settings: ImportSettings) -> FileKind:
             )
         _check_zip(path, settings)
         return "xlsx"
+    if suffix == ".xls":
+        if not head.startswith(OLE2_SIGNATURE):
+            raise ImportRejected(
+                "bad_signature", f"{path.name} n'est pas un classeur Excel 97-2003 (.xls) valide."
+            )
+        return "xls"
+    if suffix == ".ods":
+        if not head.startswith(b"PK\x03\x04"):
+            raise ImportRejected(
+                "bad_signature", f"{path.name} n'est pas un classeur OpenDocument (.ods) valide."
+            )
+        _check_zip(path, settings)
+        _check_ods_mimetype(path)
+        return "ods"
     if head.startswith(b"PK\x03\x04") or b"\x00" in head:
         raise ImportRejected(
             "binary_csv", f"{path.name} semble binaire : ce n'est pas un fichier CSV texte."
@@ -108,6 +126,21 @@ def _check_zip(path: Path, settings: ImportSettings) -> None:
     if uncompressed / compressed > settings.xlsx_max_compression_ratio:
         raise ImportRejected(
             "zip_bomb", f"{path.name} a un taux de compression anormal : import refusé."
+        )
+
+
+def _check_ods_mimetype(path: Path) -> None:
+    """Un .ods déclare son type dans l'entrée « mimetype » de l'archive."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            declared = archive.read("mimetype").strip()
+    except KeyError as exc:
+        raise ImportRejected(
+            "bad_signature", f"{path.name} n'est pas un classeur OpenDocument."
+        ) from exc
+    if declared != ODS_MIMETYPE:
+        raise ImportRejected(
+            "bad_signature", f"{path.name} est un document OpenDocument, mais pas un tableur."
         )
 
 
@@ -218,8 +251,8 @@ def read_csv(path: Path, settings: ImportSettings) -> RawTable:
 
 
 def _xlsx_text(value: object) -> str | None:
-    """Convertit une cellule Excel en texte neutre (dates ISO, nombres sans notation exotique)."""
-    if value is None:
+    """Convertit une cellule de tableur en texte neutre (dates ISO, nombres sans notation exotique)."""
+    if value is None or (isinstance(value, float) and value != value):  # NaN : cellule vide
         return None
     if isinstance(value, datetime):
         return value.date().isoformat() if value.time() == time(0) else value.isoformat(sep=" ")
@@ -254,6 +287,18 @@ def read_xlsx(path: Path, settings: ImportSettings, sheet: str | None = None) ->
     finally:
         workbook.close()
 
+    return _sheet_table(path, "xlsx", records, chosen, warnings, settings)
+
+
+def _sheet_table(
+    path: Path,
+    kind: FileKind,
+    records: list[list[str | None]],
+    chosen: str,
+    warnings: list[str],
+    settings: ImportSettings,
+) -> RawTable:
+    """Post-traitement commun aux tableurs : en-têtes, lignes vides et lignes trop longues."""
     start = next((i for i, r in enumerate(records) if any(c is not None for c in r)), None)
     if start is None:
         raise ImportRejected("no_content", f"La feuille « {chosen} » est vide.")
@@ -266,7 +311,7 @@ def read_xlsx(path: Path, settings: ImportSettings, sheet: str | None = None) ->
             "too_many_columns", f"{len(headers)} colonnes : maximum {settings.max_columns}."
         )
 
-    table = RawTable(path.name, "xlsx", headers, [], [], sheet=chosen, warnings=warnings)
+    table = RawTable(path.name, kind, headers, [], [], sheet=chosen, warnings=warnings)
     width = len(headers)
     for number, record in enumerate(records[start + 1 :], start=1):
         values = (record + [None] * width)[:width]
@@ -287,7 +332,35 @@ def read_xlsx(path: Path, settings: ImportSettings, sheet: str | None = None) ->
     return table
 
 
+def read_legacy_sheet(path: Path, settings: ImportSettings, sheet: str | None = None) -> RawTable:
+    """Lit un .xls ou un .ods avec calamine : valeurs stockées, formules jamais recalculées."""
+    kind: FileKind = "xls" if path.suffix.lower() == ".xls" else "ods"
+    try:
+        with pd.ExcelFile(path, engine="calamine") as book:
+            names = [str(n) for n in book.sheet_names]
+            if sheet is not None and sheet not in names:
+                raise ImportRejected(
+                    "sheet_not_found",
+                    f"Feuille « {sheet} » absente. Feuilles : {', '.join(names)}.",
+                )
+            chosen = sheet or names[0]
+            frame = pd.read_excel(book, sheet_name=chosen, header=None, dtype=object)
+    except ImportRejected:
+        raise
+    except Exception as exc:  # les moteurs lèvent des types variés sur fichier corrompu
+        raise ImportRejected(f"bad_{kind}", f"{path.name} ne peut pas être ouvert : {exc}") from exc
+    warnings: list[str] = []
+    if sheet is None and len(names) > 1:
+        warnings.append(f"Classeur à {len(names)} feuilles : seule « {chosen} » est importée.")
+    records = [[_xlsx_text(v) for v in row] for row in frame.itertuples(index=False, name=None)]
+    return _sheet_table(path, kind, records, chosen, warnings, settings)
+
+
 def read_table(path: Path, settings: ImportSettings, sheet: str | None = None) -> RawTable:
-    """Point d'entrée : contrôle puis lit un fichier CSV ou XLSX."""
+    """Point d'entrée : contrôle puis lit un fichier CSV, XLSX, XLS ou ODS."""
     kind = check_file(path, settings)
-    return read_xlsx(path, settings, sheet) if kind == "xlsx" else read_csv(path, settings)
+    if kind == "xlsx":
+        return read_xlsx(path, settings, sheet)
+    if kind in ("xls", "ods"):
+        return read_legacy_sheet(path, settings, sheet)
+    return read_csv(path, settings)

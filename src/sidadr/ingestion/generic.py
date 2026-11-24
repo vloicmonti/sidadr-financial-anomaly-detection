@@ -10,8 +10,10 @@ dans un même champ ; une colonne absente d'un fichier y est simplement vide.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -25,6 +27,8 @@ Mode = Literal["generic", "banking"]
 
 #: Part minimale de valeurs conformes pour typer une colonne en date ou en nombre.
 TYPE_CONFIDENCE = 0.8
+# Types qu'un utilisateur peut imposer : une liste de valeurs (enum) exigerait ses valeurs.
+OVERRIDABLE_TYPES: tuple[FieldType, ...] = ("text", "decimal", "date")
 
 #: Mots qui désignent un identifiant ou un code : la colonne reste du texte même si elle est
 #: numérique (on ne calcule pas de moyenne ni d'anomalie sur un numéro de compte).
@@ -71,14 +75,37 @@ class GenericSchema:
     fields: list[InferredField]
     mappings: dict[str, ColumnMapping] = field(default_factory=dict)  # fichier -> correspondance
 
-    def with_options(self, required: list[str] | None = None) -> GenericSchema:
-        """Marque des champs obligatoires (désignés par nom technique ou par en-tête)."""
+    def with_options(
+        self,
+        required: list[str] | None = None,
+        types: Mapping[str, FieldType] | None = None,
+    ) -> GenericSchema:
+        """Marque des champs obligatoires et impose des types choisis par l'utilisateur.
+
+        Les champs sont désignés par nom technique ou par en-tête d'origine. Un type
+        imposé ne transforme aucune valeur : celles qui ne s'y conforment pas seront
+        comptées comme non conformes par le profilage, jamais écartées en silence.
+        """
         wanted = {self.resolve(r) for r in (required or [])}
+        forced: dict[str, FieldType] = {}
+        for column, ftype in (types or {}).items():
+            if ftype not in OVERRIDABLE_TYPES:
+                raise MappingError(
+                    f"Type {ftype!r} non disponible pour {column!r} : "
+                    f"choisir parmi {', '.join(OVERRIDABLE_TYPES)}."
+                )
+            forced[self.resolve(column)] = ftype
         fields = tuple(
-            FieldSpec(f.name, f.label, f.type, f.name in wanted, (), f.values)
+            FieldSpec(f.name, f.label, forced.get(f.name, f.type), f.name in wanted, (), f.values)
             for f in self.schema.fields
         )
-        return GenericSchema(Schema(fields), self.fields, self.mappings)
+        inferred = [
+            dataclasses.replace(f, type=forced[f.name], reason="type choisi à l'import")
+            if f.name in forced and forced[f.name] != f.type
+            else f
+            for f in self.fields
+        ]
+        return GenericSchema(Schema(fields), inferred, self.mappings)
 
     def resolve(self, column: str) -> str:
         """Retrouve un champ à partir de son nom technique ou de son en-tête d'origine."""

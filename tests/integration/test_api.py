@@ -337,3 +337,26 @@ def test_records_flag_corrections_and_exclusions(client: TestClient) -> None:
     assert detail["excluded"] is True and "__excluded__" not in detail["working"]
     client.post(f"/api/sessions/{sid}/undo", json={"target": excluded.json()["target"], **reason})
     assert client.get(f"/api/sessions/{sid}/records").json()["total"] == 3
+
+
+def test_types_can_be_chosen_when_creating_a_generic_session(client: TestClient) -> None:
+    csv = b"Code postal;Quantite\n01000;3\n75001;beaucoup\n13001;5\n"
+    upload = client.post("/api/imports", files=[("files", ("cp.csv", csv))]).json()
+    assert {f["label"]: f["type"] for f in upload["generic_fields"]}["Quantite"] == "text"
+
+    refused = client.post(
+        "/api/sessions", json={"upload_id": upload["upload_id"], "types": {"Quantite": "enum"}}
+    )
+    assert refused.status_code == 422
+    created = client.post(
+        "/api/sessions", json={"upload_id": upload["upload_id"], "types": {"Quantite": "decimal"}}
+    )
+    assert created.status_code == 201, created.text
+    sid = created.json()["session_id"]
+    assert {f["name"]: f["type"] for f in created.json()["schema"]} == {
+        "code_postal": "text",
+        "quantite": "decimal",
+    }
+    profile = client.post(f"/api/sessions/{sid}/analyze").json()["profile"]
+    quantity = next(c for c in profile["columns"] if c["name"] == "quantite")
+    assert (quantity["rows"], quantity["invalid"]) == (3, 1)

@@ -101,7 +101,7 @@ def load_schema(directory: Path | None = None) -> Schema:
 
 @dataclass(frozen=True)
 class ImportSettings:
-    allowed_extensions: tuple[str, ...] = (".csv", ".xlsx")
+    allowed_extensions: tuple[str, ...] = (".csv", ".xlsx", ".xls", ".ods")
     max_file_mb: float = 50
     max_rows: int = 1_000_000
     max_columns: int = 200
@@ -129,7 +129,8 @@ def load_settings(directory: Path | None = None) -> Settings:
     try:
         imports = ImportSettings(
             allowed_extensions=tuple(
-                str(e).lower() for e in imp.get("allowed_extensions", [".csv", ".xlsx"])
+                str(e).lower()
+                for e in imp.get("allowed_extensions", [".csv", ".xlsx", ".xls", ".ods"])
             ),
             max_file_mb=float(imp.get("max_file_mb", 50)),
             max_rows=int(imp.get("max_rows", 1_000_000)),

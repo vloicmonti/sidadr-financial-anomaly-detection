@@ -17,7 +17,7 @@ import argparse
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sidadr.analysis import (
     analyze,
@@ -27,10 +27,12 @@ from sidadr.analysis import (
     save_summary,
     summarize,
 )
+from sidadr.config import FieldType
 from sidadr.correction import CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
 from sidadr.ingestion import ImportSession
+from sidadr.ingestion.errors import MappingError
 from sidadr.ingestion.generic import GenericSchema, infer_generic_schema, suggest_mode
 from sidadr.reporting.html_report import write_report
 from sidadr.storage import SessionStore, Workspace, default_workspace
@@ -66,6 +68,17 @@ def _print_created(store: SessionStore) -> None:
     print(f"\nÉtape suivante : sidadr analyze {store.session_id}")
 
 
+def _parse_types(values: list[str]) -> dict[str, FieldType]:
+    """« Montant=decimal » -> {"Montant": "decimal"} ; le type est vérifié par le schéma générique."""
+    types: dict[str, FieldType] = {}
+    for value in values:
+        column, sep, ftype = value.rpartition("=")
+        if not sep or not column.strip():
+            raise MappingError(f"--type attend COLONNE=TYPE, reçu {value!r}.")
+        types[column.strip()] = cast(FieldType, ftype.strip())
+    return types
+
+
 def cmd_session_create(
     args: argparse.Namespace, load_session: Callable[[argparse.Namespace], Any]
 ) -> int:
@@ -75,9 +88,9 @@ def cmd_session_create(
     mode = suggest_mode(missing) if args.mode == "auto" else args.mode
 
     if mode == "banking":
-        if args.key or args.group_by:
+        if args.key or args.group_by or args.type:
             print(
-                "Note : --key et --group-by ne s'appliquent qu'au mode générique ; le mode bancaire utilise sa configuration."
+                "Note : --key, --group-by et --type ne s'appliquent qu'au mode générique ; le mode bancaire utilise sa configuration."
             )
         session = load_session(args)
         if session is None:
@@ -91,14 +104,16 @@ def cmd_session_create(
         print(
             f"Mode générique retenu : ces fichiers ne contiennent pas tous les champs bancaires ({', '.join(absent)})."
         )
-    generic = infer_generic_schema([i.raw for i in inspections]).with_options(args.required)
+    generic = infer_generic_schema([i.raw for i in inspections]).with_options(
+        args.required, _parse_types(args.type)
+    )
     key_fields = [generic.resolve(k) for k in args.key]
     group_by = [generic.resolve(g) for g in args.group_by]
     if not args.accept_proposed:
         print_generic_schema(generic)
         print("\nLe schéma déduit doit être confirmé : relancez avec --accept-proposed.")
         print(
-            "Options : --key COLONNE (clé d'unicité), --required COLONNE, --group-by COLONNE, --rules FICHIER.yaml"
+            "Options : --key COLONNE (clé d'unicité), --required COLONNE, --group-by COLONNE, --type COLONNE=TYPE, --rules FICHIER.yaml"
         )
         return EXIT_NEEDS_CONFIRMATION
     session = ImportSession(schema=generic.schema)
@@ -373,6 +388,13 @@ def register(
         action="append",
         default=[],
         help="(générique) colonne de regroupement des anomalies",
+    )
+    p.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="COLONNE=TYPE",
+        help="(générique) impose le type d'une colonne : text, decimal ou date ; répétable",
     )
     p.add_argument(
         "--rules", type=Path, help="(générique) règles YAML écrites sur les noms de colonnes"

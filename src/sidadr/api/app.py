@@ -61,6 +61,10 @@ class SessionCreate(BaseModel):
     key_fields: list[str] = Field(default_factory=list, max_length=10)
     required_fields: list[str] = Field(default_factory=list, max_length=200)
     group_by: list[str] = Field(default_factory=list, max_length=5)
+    # Types imposés en mode générique : {colonne: "text" | "decimal" | "date"}.
+    types: dict[str, Literal["text", "decimal", "date"]] = Field(
+        default_factory=dict, max_length=200
+    )
 
 
 class DecisionIn(BaseModel):
@@ -277,7 +281,7 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
             store = workspace.create_session(probe, payload.name, "banking")
         else:
             generic = infer_generic_schema([i.raw for i in inspections]).with_options(
-                payload.required_fields
+                payload.required_fields, payload.types
             )
             session = ImportSession(schema=generic.schema)
             for inspection in inspections:

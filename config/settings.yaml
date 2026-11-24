@@ -1,6 +1,6 @@
 # Limites d'import (protection contre les fichiers trop gros ou malformés).
 import:
-  allowed_extensions: [".csv", ".xlsx"]
+  allowed_extensions: [".csv", ".xlsx", ".xls", ".ods"]
   max_file_mb: 50
   max_rows: 1000000
   max_columns: 200

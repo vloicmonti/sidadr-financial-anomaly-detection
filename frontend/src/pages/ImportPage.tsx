@@ -13,11 +13,20 @@ import { useId, useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router";
 
 import { api } from "../api/client";
-import type { FileInspection, InferredField, SchemaField, SessionCreate, SessionMode, UploadResult } from "../api/types";
+import type {
+  FileInspection,
+  InferredField,
+  OverridableType,
+  SchemaField,
+  SessionCreate,
+  SessionMode,
+  UploadResult,
+} from "../api/types";
 import { Button, Card, CardHeader, ErrorState } from "../components/ui";
 import { cn, formatNumber } from "../lib";
 
-const ACCEPTED = [".csv", ".xlsx"];
+const ACCEPTED = [".csv", ".xlsx", ".xls", ".ods"];
+const SPREADSHEETS = new Set([".xlsx", ".xls", ".ods"]);
 const MAX_FILES = 20;
 const MAX_MB = 50;
 
@@ -85,7 +94,7 @@ function Dropzone({
     const bad = incoming.filter((f) => !ACCEPTED.includes(extension(f.name)) || f.size > MAX_MB * 1024 * 1024);
     setRefused(
       bad.map((f) =>
-        ACCEPTED.includes(extension(f.name)) ? `${f.name} : plus de ${MAX_MB} Mo` : `${f.name} : format non accepté (CSV ou XLSX)`,
+        ACCEPTED.includes(extension(f.name)) ? `${f.name} : plus de ${MAX_MB} Mo` : `${f.name} : format non accepté (CSV, XLSX, XLS ou ODS)`,
       ),
     );
     const known = new Set(files.map((f) => f.name));
@@ -120,7 +129,7 @@ function Dropzone({
           </span>
           <span className="text-base font-semibold">Glissez vos fichiers ici, ou cliquez pour les choisir</span>
           <span className="max-w-md text-[13px] text-ink-2">
-            CSV ou Excel (.xlsx), {MAX_FILES} fichiers et {MAX_MB} Mo au plus chacun. Opérations bancaires ou n'importe quel
+            CSV, Excel (.xlsx, .xls) ou OpenDocument (.ods), {MAX_FILES} fichiers et {MAX_MB} Mo au plus chacun. Opérations bancaires ou n'importe quel
             tableau : factures, RH, stocks, ventes…
           </span>
           <input
@@ -152,7 +161,7 @@ function Dropzone({
           <ul className="mt-4 divide-y divide-line-subtle rounded-lg border border-line" aria-label="Fichiers sélectionnés">
             {files.map((file) => (
               <li key={file.name} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
-                {extension(file.name) === ".xlsx" ? (
+                {SPREADSHEETS.has(extension(file.name)) ? (
                   <FileSpreadsheet aria-hidden className="size-4 text-primary" />
                 ) : (
                   <FileText aria-hidden className="size-4 text-primary" />
@@ -192,8 +201,8 @@ function Dropzone({
 
 function FileReport({ file }: { file: FileInspection }) {
   const format =
-    file.kind === "xlsx"
-      ? `Excel, feuille « ${file.sheet ?? "?"} »`
+    file.kind !== "csv"
+      ? `${SHEET_FORMATS[file.kind]}, feuille « ${file.sheet ?? "?"} »`
       : `CSV, ${file.encoding ?? "?"}, séparateur « ${file.delimiter === "\t" ? "tabulation" : file.delimiter ?? "?"} »`;
   return (
     <Card>
@@ -273,7 +282,7 @@ function ModeChoice({
     },
   ];
   return (
-    <fieldset className="grid grid-cols-2 gap-3">
+    <fieldset className="grid min-w-0 grid-cols-2 gap-3">
       <legend className="mb-2.5 text-sm font-semibold">Mode d'analyse</legend>
       {options.map((o) => (
         <label
@@ -310,10 +319,32 @@ function ModeChoice({
 
 // --------------------------------------------------------------------------- mode générique
 
+const SHEET_FORMATS: Record<Exclude<FileInspection["kind"], "csv">, string> = {
+  xlsx: "Excel",
+  xls: "Excel 97-2003",
+  ods: "OpenDocument",
+};
+
+const TYPE_CHOICES: OverridableType[] = ["text", "decimal", "date"];
+
 interface GenericOptions {
   key: Set<string>;
   required: Set<string>;
   groupBy: Set<string>;
+  /** Types choisis par l'utilisateur, seulement là où ils diffèrent du type détecté. */
+  types: Record<string, OverridableType>;
+}
+
+const NO_OPTIONS: GenericOptions = { key: new Set(), required: new Set(), groupBy: new Set(), types: {} };
+
+/** Change le type d'une colonne ; une colonne qui n'est plus du texte ne peut plus servir de groupe. */
+function withType(options: GenericOptions, field: InferredField, type: OverridableType): GenericOptions {
+  const types = { ...options.types };
+  if (type === field.type) delete types[field.name];
+  else types[field.name] = type;
+  const groupBy = new Set(options.groupBy);
+  if (type !== "text") groupBy.delete(field.name);
+  return { ...options, types, groupBy };
 }
 
 function toggle(set: Set<string>, value: string): Set<string> {
@@ -338,14 +369,15 @@ function GenericEditor({
       <p className="mt-1 mb-3 text-[13px] text-ink-2">
         Désignez la <b className="font-medium text-ink">clé d'unicité</b> (un identifiant qui ne devrait jamais se répéter),
         les <b className="font-medium text-ink">champs obligatoires</b> et, si utile, une colonne pour comparer les
-        valeurs numériques par groupe.
+        valeurs numériques par groupe. Corrigez le <b className="font-medium text-ink">type</b> si la détection se trompe :
+        les valeurs qui ne s'y conforment pas seront signalées, jamais supprimées.
       </p>
       <div className="overflow-x-auto rounded-md border border-line">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="text-left text-xs text-ink-3">
               <th scope="col" className="bg-subtle px-3 py-2 font-medium">Colonne</th>
-              <th scope="col" className="bg-subtle px-3 py-2 font-medium">Type détecté</th>
+              <th scope="col" className="bg-subtle px-3 py-2 font-medium">Type</th>
               <th scope="col" className="bg-subtle px-3 py-2 text-right font-medium">Valeurs</th>
               <th scope="col" className="bg-subtle px-3 py-2 text-center font-medium">Clé</th>
               <th scope="col" className="bg-subtle px-3 py-2 text-center font-medium">Obligatoire</th>
@@ -353,50 +385,69 @@ function GenericEditor({
             </tr>
           </thead>
           <tbody>
-            {fields.map((f) => (
-              <tr key={f.name} className="border-t border-line-subtle">
-                <th scope="row" className="px-3 py-2 text-left font-medium">
-                  {f.label}
-                  <span className="ml-2 font-mono text-[11px] font-normal text-ink-3">{f.name}</span>
-                </th>
-                <td className="px-3 py-2">
-                  <span className="rounded-full bg-subtle px-2 py-0.5 text-xs">{TYPE_LABELS[f.type] ?? f.type}</span>
-                  {f.reason !== "texte" ? <span className="ml-2 text-xs text-ink-3">{f.reason}</span> : null}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatNumber(f.filled)}</td>
-                <td className="px-3 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    aria-label={`${f.label} : clé d'unicité`}
-                    checked={options.key.has(f.name)}
-                    onChange={() => onChange({ ...options, key: toggle(options.key, f.name) })}
-                    className="accent-[var(--primary)]"
-                  />
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    aria-label={`${f.label} : obligatoire`}
-                    checked={options.required.has(f.name)}
-                    onChange={() => onChange({ ...options, required: toggle(options.required, f.name) })}
-                    className="accent-[var(--primary)]"
-                  />
-                </td>
-                <td className="px-3 py-2 text-center">
-                  {f.type === "text" ? (
+            {fields.map((f) => {
+              const type = options.types[f.name] ?? f.type;
+              const changed = type !== f.type;
+              return (
+                <tr key={f.name} className="border-t border-line-subtle">
+                  <th scope="row" className="px-3 py-2 text-left font-medium">
+                    {f.label}
+                    <span className="ml-2 font-mono text-[11px] font-normal text-ink-3">{f.name}</span>
+                  </th>
+                  <td className="min-w-48 px-3 py-2">
+                    <select
+                      aria-label={`${f.label} : type`}
+                      value={type}
+                      onChange={(event) => onChange(withType(options, f, event.target.value as OverridableType))}
+                      className={cn("h-7 rounded-md border bg-surface px-1.5 text-xs", changed ? "border-primary text-primary" : "border-line")}
+                    >
+                      {TYPE_CHOICES.map((t) => (
+                        <option key={t} value={t}>
+                          {TYPE_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                    {changed ? (
+                      <span className="mt-1 block text-xs text-ink-3">détecté : {(TYPE_LABELS[f.type] ?? f.type).toLowerCase()}</span>
+                    ) : f.reason !== "texte" ? (
+                      <span className="mt-1 block text-xs text-ink-3">{f.reason}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatNumber(f.filled)}</td>
+                  <td className="px-3 py-2 text-center">
                     <input
                       type="checkbox"
-                      aria-label={`${f.label} : grouper les valeurs numériques`}
-                      checked={options.groupBy.has(f.name)}
-                      onChange={() => onChange({ ...options, groupBy: toggle(options.groupBy, f.name) })}
+                      aria-label={`${f.label} : clé d'unicité`}
+                      checked={options.key.has(f.name)}
+                      onChange={() => onChange({ ...options, key: toggle(options.key, f.name) })}
                       className="accent-[var(--primary)]"
                     />
-                  ) : (
-                    <span className="text-ink-3">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`${f.label} : obligatoire`}
+                      checked={options.required.has(f.name)}
+                      onChange={() => onChange({ ...options, required: toggle(options.required, f.name) })}
+                      className="accent-[var(--primary)]"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {type === "text" ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`${f.label} : grouper les valeurs numériques`}
+                        checked={options.groupBy.has(f.name)}
+                        onChange={() => onChange({ ...options, groupBy: toggle(options.groupBy, f.name) })}
+                        className="accent-[var(--primary)]"
+                      />
+                    ) : (
+                      <span className="text-ink-3">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -497,7 +548,7 @@ export function ImportPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [mode, setMode] = useState<SessionMode>("generic");
   const [name, setName] = useState("");
-  const [options, setOptions] = useState<GenericOptions>({ key: new Set(), required: new Set(), groupBy: new Set() });
+  const [options, setOptions] = useState<GenericOptions>(NO_OPTIONS);
   const [overrides, setOverrides] = useState<Record<string, Record<string, string | null>>>({});
   const schema = useQuery({ queryKey: ["schema"], queryFn: api.schema, staleTime: Infinity });
 
@@ -506,7 +557,7 @@ export function ImportPage() {
     onSuccess: (result) => {
       setMode(result.suggested_mode);
       setName(result.files.map((f) => f.file).join(", "));
-      setOptions({ key: new Set(), required: new Set(), groupBy: new Set() });
+      setOptions(NO_OPTIONS);
       setOverrides({});
     },
   });
@@ -534,7 +585,13 @@ export function ImportPage() {
     const base = { upload_id: result.upload_id, mode, name: name.trim() || result.files.map((f) => f.file).join(", ") };
     create.mutate(
       mode === "generic"
-        ? { ...base, key_fields: [...options.key], required_fields: [...options.required], group_by: [...options.groupBy] }
+        ? {
+            ...base,
+            key_fields: [...options.key],
+            required_fields: [...options.required],
+            group_by: [...options.groupBy],
+            ...(Object.keys(options.types).length ? { types: options.types } : {}),
+          }
         : { ...base, mappings: overrides },
     );
   }
@@ -566,7 +623,7 @@ export function ImportPage() {
 
           <Card>
             <CardHeader title="Configuration de la session" />
-            <div className="grid gap-5 px-5.5 pt-4 pb-5.5">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 px-5.5 pt-4 pb-5.5">
               <ModeChoice result={result} mode={mode} onChange={setMode} />
               {mode === "generic" ? (
                 <GenericEditor fields={result.generic_fields} options={options} onChange={setOptions} />
@@ -591,8 +648,8 @@ export function ImportPage() {
               ) : null}
               {create.isError ? <ErrorState error={create.error} /> : null}
 
-              <div className="flex items-center gap-2 border-t border-line-subtle pt-4">
-                <span className="mr-auto text-xs text-ink-3">
+              <div className="flex flex-wrap items-center gap-2 border-t border-line-subtle pt-4">
+                <span className="mr-auto min-w-56 flex-1 text-xs text-ink-3">
                   La création enregistre un instantané en lecture seule des données ; elles ne seront jamais modifiées.
                 </span>
                 <Button

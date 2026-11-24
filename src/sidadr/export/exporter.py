@@ -149,7 +149,9 @@ def export_session(service: CorrectionService, out_dir: Path, fmt: str = "xlsx")
 def read_back(path: Path) -> pd.DataFrame:
     """Relit les données exportées (pour vérifier qu'un export restitue les mêmes valeurs)."""
     if path.suffix == ".xlsx":
-        frame = pd.read_excel(path, sheet_name="Données", dtype=str, keep_default_na=False)
+        frame = pd.read_excel(
+            path, sheet_name="Données", dtype=str, keep_default_na=False, engine="openpyxl"
+        )
     else:
         frame = pd.read_csv(path, sep=";", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     return frame.where(frame != "", None)

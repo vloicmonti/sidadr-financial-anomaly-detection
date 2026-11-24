@@ -138,6 +138,38 @@ describe("écran d'import", () => {
     expect(upload?.init?.body).toBeInstanceOf(FormData);
   });
 
+  it("permet de corriger le type détecté et l'envoie à la création", async () => {
+    const calls = mockApi(GENERIC);
+    renderImport();
+    await userEvent.upload(screen.getByLabelText(/Glissez vos fichiers/i), csv("factures.csv"));
+    await userEvent.click(screen.getByRole("button", { name: "Analyser le fichier" }));
+    const montant = await screen.findByRole("combobox", { name: "Montant HT : type" });
+    expect(montant).toHaveValue("decimal");
+
+    // Un nombre ne sert pas de groupe ; repassé en texte, il le peut.
+    await userEvent.selectOptions(montant, "text");
+    expect(screen.getByText("détecté : nombre")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Montant HT : grouper les valeurs numériques" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "N° facture : type" }), "decimal");
+    expect(screen.queryByRole("checkbox", { name: "N° facture : grouper les valeurs numériques" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Créer la session/ }));
+    await waitFor(() => expect(calls.some((c) => c.url === "/api/sessions" && c.init?.method === "POST")).toBe(true));
+    const body = JSON.parse(String(calls.find((c) => c.url === "/api/sessions" && c.init?.method === "POST")?.init?.body));
+    expect(body.types).toEqual({ montant_ht: "text", n_facture: "decimal" });
+  });
+
+  it("accepte les classeurs .xls et .ods", async () => {
+    mockApi(GENERIC);
+    renderImport();
+    await userEvent.upload(screen.getByLabelText(/Glissez vos fichiers/i), [
+      new File(["x"], "ancien.xls", { type: "application/vnd.ms-excel" }),
+      new File(["x"], "libre.ods", { type: "application/vnd.oasis.opendocument.spreadsheet" }),
+    ]);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Fichiers sélectionnés" })).toHaveTextContent(/ancien\.xls.*libre\.ods/);
+  });
+
   it("parcours bancaire : correspondance modifiable et champs obligatoires contrôlés", async () => {
     const banking: UploadResult = {
       ...GENERIC,
