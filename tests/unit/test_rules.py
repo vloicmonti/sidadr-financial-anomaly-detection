@@ -122,6 +122,29 @@ def test_regex_and_unreadable_values(tmp_path: Path) -> None:
     assert report.outcomes[0].not_evaluable == 1
 
 
+def test_valid_type_flags_unreadable_values_only(tmp_path: Path) -> None:
+    body = (
+        RULE
+        + "    check: {field: amount, op: valid_type}\n"
+        + RULE.replace("R1", "R2")
+        + "    check: {field: transaction_date, op: valid_type}\n"
+    )
+    rows = [
+        _row(1),
+        _row(2, amount="12O 000"),
+        _row(3, transaction_date="2025-02-30"),
+        _row(4, amount=None),  # vide : l'affaire de not_null, pas du format
+    ]
+    report = _run(tmp_path, body, rows)
+    assert sorted((v.record_id, v.field) for v in report.violations) == [
+        ("a:2", "amount"),
+        ("a:3", "transaction_date"),
+    ]
+    assert [v.rule.expected() for v in report.violations] == ["un nombre", "une date valide"]
+    with pytest.raises(ConfigError, match="texte libre"):
+        load_rules(_rules(tmp_path, RULE + "    check: {field: customer_name, op: valid_type}\n"))
+
+
 def test_values_are_never_executed_as_code(tmp_path: Path) -> None:
     body = (
         RULE + "    check: {field: customer_name, op: '==', value: \"__import__('os').getcwd()\"}\n"

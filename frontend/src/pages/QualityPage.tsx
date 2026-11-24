@@ -22,6 +22,10 @@ function decimal(value: string | number): string {
   return Number.isFinite(n) ? n.toLocaleString("fr-FR", { maximumFractionDigits: 3 }) : String(value);
 }
 
+function placeholderCount(column: ColumnProfile): number {
+  return Object.values(column.placeholders ?? {}).reduce((sum, n) => sum + n, 0);
+}
+
 const TH = "h-10 border-y border-line-subtle bg-[#fcfcfd] px-3 text-left text-xs font-medium whitespace-nowrap text-ink-3";
 
 function Meter({ value, tone = "bg-brand-600" }: { value: number; tone?: string }) {
@@ -143,6 +147,7 @@ function Rules({ analysis, sessionId }: { analysis: AnalysisSummary; sessionId: 
 
 function ColumnDetail({ column, sessionId }: { column: ColumnProfile; sessionId: string }) {
   const reasons = Object.entries(column.invalid_reasons);
+  const placeholders = Object.entries(column.placeholders ?? {});
   return (
     <div className="grid gap-4 px-5.5 py-4 text-[13px] sm:grid-cols-2">
       {column.numeric ? (
@@ -218,6 +223,22 @@ function ColumnDetail({ column, sessionId }: { column: ColumnProfile; sessionId:
           ) : null}
         </div>
       ) : null}
+      {placeholders.length ? (
+        <div>
+          <h4 className="mb-1.5 font-medium">Valeurs de remplissage</h4>
+          <ul className="grid gap-0.5">
+            {placeholders.map(([value, count]) => (
+              <li key={value} className="flex gap-3">
+                <span className="flex-1 font-mono text-xs">{value}</span>
+                <span className="text-warning tabular-nums">{formatNumber(count)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-3">
+            Écrites à la place d'une donnée : comptées comme des vides, jamais modifiées.
+          </p>
+        </div>
+      ) : null}
       {column.decisions.length ? (
         <div className="sm:col-span-2">
           <h4 className="mb-1.5 font-medium">Choix d'interprétation du moteur</h4>
@@ -288,7 +309,12 @@ function Profile({ analysis, sessionId }: { analysis: AnalysisSummary; sessionId
                       <span className="flex items-center gap-2.5 whitespace-nowrap tabular-nums">
                         <Meter value={filled} tone={c.required && c.missing ? "bg-warning" : "bg-brand-600"} />
                         {formatPercent(filled)}
-                        {c.missing ? <span className="text-xs text-ink-3">{formatNumber(c.missing)} vide(s)</span> : null}
+                        {c.missing ? (
+                          <span className="text-xs text-ink-3">
+                            {formatNumber(c.missing)} vide(s)
+                            {placeholderCount(c) ? ` dont ${formatNumber(placeholderCount(c))} valeur(s) de remplissage` : ""}
+                          </span>
+                        ) : null}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(c.distinct)}</td>

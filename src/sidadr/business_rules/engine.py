@@ -12,6 +12,7 @@ import pandas as pd
 from sidadr.business_rules.model import COMPARISONS, SET_OPS, Rule, RuleSet
 from sidadr.config import Schema, default_schema
 from sidadr.findings import Finding
+from sidadr.ingestion.values import is_missing
 from sidadr.profiling.profile import typed_frame
 
 _COMPARE: dict[str, Callable[[Any, Any], bool]] = {
@@ -122,7 +123,12 @@ def evaluate_rules(
                 broken = False
                 compared: str | None = None
                 if rule.op == "not_null":
-                    broken = observed is None
+                    # Une valeur de remplissage (« UNKNOWN ») vaut absence ; on la garde
+                    # comme valeur observée pour que l'explication la montre.
+                    broken = is_missing(raw_value, ruleset.missing_markers)
+                elif rule.op == "valid_type":
+                    # Renseignée, pas une valeur de remplissage, mais illisible dans le type.
+                    broken = not is_missing(raw_value, ruleset.missing_markers) and value is None
                 elif value is None:
                     not_evaluable += 1
                     continue

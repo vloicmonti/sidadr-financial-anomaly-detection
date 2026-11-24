@@ -19,6 +19,7 @@ import pandas as pd
 
 from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
 from sidadr.business_rules import Rule, RuleReport, RuleSet, evaluate_rules, load_rules
+from sidadr.business_rules.model import TYPE_EXPECTATIONS
 from sidadr.config import (
     AnomalySettings,
     DuplicateSettings,
@@ -34,6 +35,7 @@ from sidadr.config import (
 from sidadr.cross_entity import EntityReport, group_entities
 from sidadr.deduplication import DuplicateKind, DuplicateReport, detect_duplicates
 from sidadr.findings import Finding, Severity
+from sidadr.ingestion.values import missing_marker_set, placeholder
 from sidadr.name_matching import MatchReport, match_names
 from sidadr.profiling import DatasetProfile, QualityScore, compute_score, profile_frame
 
@@ -70,12 +72,16 @@ class AnalysisResult:
         ]
 
 
-def _generic_rules(schema: Schema) -> RuleSet:
-    """Règles par défaut du mode générique : seuls les champs désignés obligatoires sont contrôlés."""
+def _generic_rules(schema: Schema, markers: frozenset[str] = frozenset()) -> RuleSet:
+    """Règles par défaut du mode générique.
+
+    Champs désignés obligatoires renseignés (une valeur de remplissage comme « UNKNOWN »
+    vaut absence), et toute valeur renseignée lisible dans le type de sa colonne.
+    """
+    rules: list[Rule] = []
     required = tuple(f.name for f in schema.fields if f.required)
-    rules: tuple[Rule, ...] = ()
     if required:
-        rules = (
+        rules.append(
             Rule(
                 rule_id="R-MANDATORY",
                 description="Les champs désignés obligatoires doivent être renseignés",
@@ -84,9 +90,39 @@ def _generic_rules(schema: Schema) -> RuleSet:
                 severity=Severity.CERTAIN_ERROR,
                 recommendation="Compléter la valeur depuis la source ; ne pas l'inventer.",
                 dimension="completeness",
-            ),
+            )
         )
-    return RuleSet(rules, {}, Path("(règles par défaut du mode générique)"))
+    for rule_id, ftype, label in (("R-NUMBER", "decimal", "nombre"), ("R-DATE", "date", "date")):
+        fields = tuple(f.name for f in schema.fields if f.type == ftype)
+        if fields:
+            rules.append(
+                Rule(
+                    rule_id=rule_id,
+                    description=f"Les valeurs des colonnes de type {label} doivent être lisibles",
+                    fields=fields,
+                    op="valid_type",
+                    severity=Severity.CERTAIN_ERROR,
+                    recommendation="Corriger la valeur depuis la source, ou revoir le type "
+                    "de la colonne si la détection s'est trompée.",
+                    dimension="validity",
+                    expected_type=TYPE_EXPECTATIONS[ftype],
+                )
+            )
+    return RuleSet(
+        tuple(rules), {}, Path("(règles par défaut du mode générique)"), missing_markers=markers
+    )
+
+
+def _without_placeholders(
+    frame: pd.DataFrame, schema: Schema, markers: frozenset[str]
+) -> pd.DataFrame:
+    """Vue d'analyse où les valeurs de remplissage sont vides (les données ne changent pas)."""
+    if not markers:
+        return frame
+    view = frame.copy()
+    for name in schema.names:
+        view[name] = [None if placeholder(v, markers) else v for v in view[name].tolist()]
+    return view
 
 
 def analyze(
@@ -103,21 +139,30 @@ def analyze(
     schema = schema or default_schema()
     settings = settings or default_settings()
     options = options or {}
-    profile = profile_frame(frame, schema, settings)
+    # Valeurs de remplissage : mode générique seulement (le mode bancaire a ses référentiels).
+    markers = (
+        missing_marker_set(settings.profiling.missing_markers) if mode == "generic" else frozenset()
+    )
+    profile = profile_frame(frame, schema, settings, markers)
 
     if mode == "generic":
+        view = _without_placeholders(frame, schema, markers)
         key_fields = tuple(str(f) for f in options.get("key_fields", []))
-        duplicates = detect_duplicates(frame, DuplicateSettings(key_fields, False, ()), schema)
+        duplicates = detect_duplicates(view, DuplicateSettings(key_fields, False, ()), schema)
         numeric = tuple(f.name for f in schema.fields if f.type == "decimal")
         group_by = tuple(str(f) for f in options.get("group_by", []))
         anomalies = detect_anomalies(
-            frame, dataclasses.replace(AnomalySettings(), fields=numeric, group_by=group_by), schema
+            view, dataclasses.replace(AnomalySettings(), fields=numeric, group_by=group_by), schema
         )
         user_rules = rules_path or (
             Path(options["rules_path"]) if options.get("rules_path") else None
         )
         ruleset = (
-            load_rules(user_rules, schema, rule_overrides) if user_rules else _generic_rules(schema)
+            dataclasses.replace(
+                load_rules(user_rules, schema, rule_overrides), missing_markers=markers
+            )
+            if user_rules
+            else _generic_rules(schema, markers)
         )
         rules = evaluate_rules(frame, ruleset, schema)
         score = compute_score(
@@ -189,6 +234,7 @@ def profile_to_dict(profile: DatasetProfile) -> dict[str, Any]:
                 "checked_for_validity": c.checked_for_validity,
                 "invalid_reasons": dict(c.invalid_reasons),
                 "invalid_samples": c.invalid_record_ids[:MAX_INVALID_SAMPLES],
+                "placeholders": dict(c.placeholders),
                 "decisions": list(c.decisions),
                 "numeric": None
                 if stats is None

@@ -13,3 +13,8 @@ import:
 profiling:
   top_values: 5
   sample_record_ids: 5
+  # Mode générique : valeurs écrites à la place d'une donnée absente (casse ignorée).
+  # Elles comptent comme des vides dans le profil, le score et les champs obligatoires ;
+  # elles ne sont jamais modifiées. « NA » est volontairement absent (code pays).
+  missing_markers: ["ERROR", "UNKNOWN", "N/A", "NULL", "NONE", "NAN", "#N/A", "#VALUE!",
+                    "#VALEUR!", "#REF!", "#DIV/0!", "-", "?"]

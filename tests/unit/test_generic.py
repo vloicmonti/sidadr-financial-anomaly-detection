@@ -1,5 +1,6 @@
 """Mode générique : n'importe quel fichier tabulaire, sans schéma bancaire."""
 
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -186,7 +187,11 @@ def test_generic_analysis_finds_the_defects(generic_service: CorrectionService) 
     assert result.names is None and result.entities is None
     key_groups = {g.key_value for g in result.duplicates.by_kind(DuplicateKind.KEY)}
     assert key_groups == {"F-001", "F-010"}
-    assert [v.field for v in result.rules.violations] == ["fournisseur"]
+    # Fournisseur manquant, et la date impossible devient un constat (règle R-DATE).
+    assert [(v.rule.rule_id, v.field) for v in result.rules.violations] == [
+        ("R-MANDATORY", "fournisseur"),
+        ("R-DATE", "date_facture"),
+    ]
     assert result.profile["date_facture"].invalid == 1
     assert any(a.raw_value == "250000,00" for a in result.anomalies.anomalies)
     score = result.score
@@ -212,3 +217,63 @@ def test_banking_sessions_are_unchanged(tmp_path: Path) -> None:
     store = Workspace(tmp_path / "ws")
     with pytest.raises(Exception, match="Mode inconnu"):
         store.create_session(ImportSession(), "x", "autre")
+
+
+# ---------------------------------------------------------------- valeurs de remplissage et formats
+
+
+def test_placeholders_count_as_missing_and_invalid_values_become_findings(tmp_path: Path) -> None:
+    text = (
+        "Ref;Article;Quantité;Date\n"
+        "T1;Café;2;2025-01-02\n"
+        "T2;UNKNOWN;error;2025-01-03\n"
+        "T3;Thé;beaucoup;2025-02-30\n"
+        "T4;;3;N/A\n"
+        "UNKNOWN;Gâteau;1;2025-01-05\n"
+        "unknown;Gâteau;1;2025-01-06\n"
+    )
+    raw = read_table(_write(tmp_path, "f.csv", text), ImportSettings())
+    generic = infer_generic_schema([raw]).with_options(
+        ["Ref", "Article", "Quantité", "Date"], {"Quantité": "decimal", "Date": "date"}
+    )
+    session = ImportSession(schema=generic.schema)
+    session.add(
+        session.inspect(tmp_path / "f.csv"), generic.mappings["f.csv"].confirm(generic.schema)
+    )
+    result = analyze(session.frame, generic.schema, mode="generic", options={"key_fields": ["ref"]})
+
+    article = result.profile["article"]
+    assert (article.missing, article.placeholders) == (2, {"UNKNOWN": 1})
+    quantity, when = result.profile["quantite"], result.profile["date"]
+    assert (quantity.missing, quantity.invalid) == (1, 1)  # « error » absent, « beaucoup » invalide
+    assert (when.missing, when.invalid) == (1, 1)  # « N/A » absent, 30 février invalide
+
+    findings = result.findings()
+    by_rule = Counter(f.rule_id for f in findings)
+    assert by_rule["R-MANDATORY"] == 6  # article ×2, quantité, date, et les deux réf. « unknown »
+    assert by_rule["R-NUMBER"] == 1 and by_rule["R-DATE"] == 1
+    shown = next(f for f in findings if f.rule_id == "R-MANDATORY" and f.field == "article")
+    assert "« UNKNOWN »" in shown.explanation
+    assert next(f for f in findings if f.rule_id == "R-NUMBER").observed_value == "beaucoup"
+    # Deux références « UNKNOWN » / « unknown » ne forment pas un doublon d'identifiant.
+    assert by_rule.get("DUP-KEY", 0) == 0 and not result.duplicates.findings()
+
+
+def test_placeholders_are_not_applied_in_banking_mode() -> None:
+    from sidadr.config import default_schema
+
+    schema = default_schema()
+    row = {name: "x" for name in schema.names}
+    frame = pd.DataFrame(
+        [
+            {
+                **row,
+                "record_id": "a:1",
+                "import_id": "a",
+                "source_file": "a.csv",
+                "source_row": 1,
+                "customer_name": "UNKNOWN",
+            }
+        ]
+    )
+    assert analyze(frame, schema).profile["customer_name"].missing == 0

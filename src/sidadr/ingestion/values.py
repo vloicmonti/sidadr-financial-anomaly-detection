@@ -11,15 +11,41 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
+import pandas as pd
+
 # --------------------------------------------------------------------------- nombres
 
 _SPACES = re.compile(r"[\s  ]")
 _NUMBER_BODY = re.compile(r"\d[\d.,]*")
+
+
+def missing_marker_set(markers: Iterable[str]) -> frozenset[str]:
+    """Normalise une liste de valeurs de remplissage pour la comparaison (casse, espaces)."""
+    return frozenset(m.strip().upper() for m in markers if m.strip())
+
+
+def placeholder(value: object, markers: frozenset[str]) -> str | None:
+    """La valeur de remplissage reconnue (« UNKNOWN »…), telle qu'écrite, ou None."""
+    if markers and isinstance(value, str) and value.strip().upper() in markers:
+        return value.strip()
+    return None
+
+
+def is_missing(value: object, markers: frozenset[str] = frozenset()) -> bool:
+    """Vide, espaces seuls, NA pandas, ou valeur de remplissage reconnue."""
+    if value is None or value is pd.NA:
+        return True
+    if isinstance(value, float) and value != value:  # NaN
+        return True
+    if isinstance(value, str):
+        return not value.strip() or placeholder(value, markers) is not None
+    return False
 
 
 class DecimalSeparator(StrEnum):

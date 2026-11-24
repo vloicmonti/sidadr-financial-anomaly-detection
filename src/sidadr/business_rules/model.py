@@ -22,7 +22,13 @@ from sidadr.findings import Severity
 
 COMPARISONS = ("<", "<=", ">", ">=", "==", "!=")
 SET_OPS = ("in", "not_in")
-OPERATORS = (*COMPARISONS, *SET_OPS, "not_null", "regex")
+# valid_type : la valeur renseignée doit se lire dans le type du champ (nombre, date, liste).
+OPERATORS = (*COMPARISONS, *SET_OPS, "not_null", "regex", "valid_type")
+TYPE_EXPECTATIONS = {
+    "decimal": "un nombre",
+    "date": "une date valide",
+    "enum": "une valeur de la liste du champ",
+}
 DIMENSIONS = ("consistency", "completeness", "validity")
 
 RuleValue = Decimal | date | str
@@ -43,11 +49,14 @@ class Rule:
     reference_name: str | None = None
     pattern: re.Pattern[str] | None = None
     when: tuple[tuple[str, frozenset[str]], ...] = ()
+    expected_type: str | None = None  # valid_type : ce que le type attend, en clair
 
     def expected(self) -> str:
         """Ce que la règle attend, en clair."""
         if self.op == "not_null":
             return "une valeur renseignée"
+        if self.op == "valid_type":
+            return self.expected_type or "une valeur du type du champ"
         if self.op in SET_OPS:
             if self.reference_name:
                 place = (
@@ -68,6 +77,8 @@ class RuleSet:
     rules: tuple[Rule, ...]
     parameters: dict[str, RuleValue]
     source: Path
+    # Valeurs de remplissage (normalisées) traitées comme absentes ; vide en mode bancaire.
+    missing_markers: frozenset[str] = frozenset()
 
     def __getitem__(self, rule_id: str) -> Rule:
         return next(r for r in self.rules if r.rule_id == rule_id)
@@ -207,6 +218,12 @@ def load_rules(
                 allowed = frozenset(str(v).strip() for v in check["values"])
             else:
                 raise ConfigError(f"{where} : 'values' ou 'reference' obligatoire pour {op}.")
+        elif op == "valid_type":
+            if field_type not in TYPE_EXPECTATIONS:
+                raise ConfigError(
+                    f"{where} : valid_type s'applique à des champs d'un même type "
+                    "nombre, date ou liste (pas au texte libre)."
+                )
         elif op == "regex":
             try:
                 pattern = re.compile(str(check.get("pattern", "")))
@@ -240,6 +257,7 @@ def load_rules(
                 reference_name=reference_name,
                 pattern=pattern,
                 when=tuple(when),
+                expected_type=TYPE_EXPECTATIONS.get(field_type) if op == "valid_type" else None,
             )
         )
 

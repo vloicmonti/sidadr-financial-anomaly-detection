@@ -110,10 +110,31 @@ class ImportSettings:
     csv_sample_bytes: int = 65_536
 
 
+# Valeurs qu'un export écrit à la place d'une donnée absente. Comparées sans tenir compte
+# de la casse ni des espaces de bord. « NA » n'y figure pas : c'est aussi un code pays.
+DEFAULT_MISSING_MARKERS: tuple[str, ...] = (
+    "ERROR",
+    "UNKNOWN",
+    "N/A",
+    "NULL",
+    "NONE",
+    "NAN",
+    "#N/A",
+    "#VALUE!",
+    "#VALEUR!",
+    "#REF!",
+    "#DIV/0!",
+    "-",
+    "?",
+)
+
+
 @dataclass(frozen=True)
 class ProfilingSettings:
     top_values: int = 5
     sample_record_ids: int = 5
+    # Mode générique : valeurs de remplissage traitées comme absentes (jamais modifiées).
+    missing_markers: tuple[str, ...] = DEFAULT_MISSING_MARKERS
 
 
 @dataclass(frozen=True)
@@ -142,6 +163,11 @@ def load_settings(directory: Path | None = None) -> Settings:
         profiling = ProfilingSettings(
             top_values=int(prof.get("top_values", 5)),
             sample_record_ids=int(prof.get("sample_record_ids", 5)),
+            missing_markers=tuple(
+                str(m).strip()
+                for m in prof.get("missing_markers", DEFAULT_MISSING_MARKERS)
+                if str(m).strip()
+            ),
         )
     except (TypeError, ValueError) as exc:
         raise ConfigError(f"settings.yaml : valeur invalide ({exc}).") from exc

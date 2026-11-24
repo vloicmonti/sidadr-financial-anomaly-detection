@@ -270,6 +270,8 @@ export interface ColumnProfile {
   checked_for_validity: boolean;
   invalid_reasons: Record<string, number>;
   invalid_samples: string[];
+  /** Valeurs de remplissage (« UNKNOWN »…) comptées comme vides ; absent des anciennes analyses. */
+  placeholders?: Record<string, number>;
   decisions: string[];
   numeric: { count: number; min: string; q1: string; median: string; q3: string; max: string; mean: number; std: number } | null;
   date_range: [string, string] | null;

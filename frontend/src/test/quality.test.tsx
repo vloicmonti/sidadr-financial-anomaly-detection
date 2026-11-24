@@ -32,6 +32,7 @@ const ANALYSIS = {
       {
         name: "prix", label: "Prix", type: "decimal", required: true, rows: 4, missing: 1, distinct: 3, invalid: 1,
         checked_for_validity: true, invalid_reasons: { "pas un nombre": 1 }, invalid_samples: ["pieces:3"], decisions: [],
+        placeholders: { UNKNOWN: 1 },
         numeric: { count: 2, min: "0.10", q1: "0.10", median: "0.50", q3: "0.90", max: "0.90", mean: 0.5, std: 0.4 },
         date_range: null, top_values: [["0.90", 1]],
       },
@@ -108,6 +109,8 @@ describe("qualité des données", () => {
     await userEvent.click(screen.getByRole("button", { name: "Détail de Prix" }));
     expect(screen.getByText("Médiane").nextSibling).toHaveTextContent("0,5");
     expect(screen.getByText("pas un nombre")).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Prix/ })).toHaveTextContent("1 vide(s) dont 1 valeur(s) de remplissage");
+    expect(screen.getByText("Valeurs de remplissage").nextSibling).toHaveTextContent("UNKNOWN1");
     expect(screen.getByRole("link", { name: "pieces:3" })).toHaveAttribute("href", "/sessions/S1/records?r=pieces%3A3");
     expect(screen.getByRole("link", { name: "Qualité des données" })).toHaveAttribute("href", "/sessions/S1/quality");
   });

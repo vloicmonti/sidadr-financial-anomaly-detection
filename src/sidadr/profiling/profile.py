@@ -22,8 +22,10 @@ from sidadr.ingestion.values import (
     DecimalSeparator,
     infer_date_order,
     infer_decimal_separator,
+    is_missing,
     parse_date,
     parse_decimal,
+    placeholder,
 )
 
 
@@ -51,6 +53,8 @@ class ColumnProfile:
     invalid: int = 0
     invalid_reasons: dict[str, int] = field(default_factory=dict)
     invalid_record_ids: list[str] = field(default_factory=list)
+    # Valeurs de remplissage rencontrées (mode générique), comptées dans « missing ».
+    placeholders: dict[str, int] = field(default_factory=dict)
     decisions: list[str] = field(default_factory=list)
     numeric: NumericStats | None = None
     date_range: tuple[date, date] | None = None
@@ -86,7 +90,7 @@ class DatasetProfile:
 
 
 def _is_missing(value: object) -> bool:
-    return value is None or (isinstance(value, str) and not value.strip()) or value is pd.NA
+    return is_missing(value)
 
 
 def _quartiles(values: list[Decimal]) -> tuple[Decimal, Decimal, Decimal]:
@@ -96,15 +100,21 @@ def _quartiles(values: list[Decimal]) -> tuple[Decimal, Decimal, Decimal]:
     return Decimal(q1), Decimal(q2), Decimal(q3)
 
 
-def _profile_column(frame: pd.DataFrame, spec: FieldSpec, settings: Settings) -> ColumnProfile:
+def _profile_column(
+    frame: pd.DataFrame,
+    spec: FieldSpec,
+    settings: Settings,
+    markers: frozenset[str] = frozenset(),
+) -> ColumnProfile:
     values = frame[spec.name].tolist()
     record_ids = frame["record_id"].tolist()
     import_ids = frame["import_id"].tolist()
     present = [
         (v, r, i)
         for v, r, i in zip(values, record_ids, import_ids, strict=True)
-        if not _is_missing(v)
+        if not is_missing(v, markers)
     ]
+    found = Counter(p for p in (placeholder(v, markers) for v in values) if p is not None)
     profile = ColumnProfile(
         name=spec.name,
         label=spec.label,
@@ -114,6 +124,7 @@ def _profile_column(frame: pd.DataFrame, spec: FieldSpec, settings: Settings) ->
         missing=len(values) - len(present),
         distinct=len({str(v) for v, _, _ in present}),
     )
+    profile.placeholders = dict(found.most_common())
     reasons: Counter[str] = Counter()
 
     def flag(record_id: str, reason: str) -> None:
@@ -226,12 +237,18 @@ def _normalized_decimal(value: object, separator: DecimalSeparator | None) -> st
 
 
 def profile_frame(
-    frame: pd.DataFrame, schema: Schema | None = None, settings: Settings | None = None
+    frame: pd.DataFrame,
+    schema: Schema | None = None,
+    settings: Settings | None = None,
+    missing_markers: frozenset[str] = frozenset(),
 ) -> DatasetProfile:
-    """Profile une table canonique (un fichier ou une session entière)."""
+    """Profile une table canonique (un fichier ou une session entière).
+
+    `missing_markers` (mode générique) : valeurs de remplissage comptées comme absentes.
+    """
     schema = schema or default_schema()
     settings = settings or default_settings()
-    columns = [_profile_column(frame, spec, settings) for spec in schema.fields]
+    columns = [_profile_column(frame, spec, settings, missing_markers) for spec in schema.fields]
     business = comparable_frame(frame, schema)
     duplicated = business.duplicated(keep=False)
     groups = business[duplicated].drop_duplicates().shape[0] if duplicated.any() else 0
