@@ -22,7 +22,7 @@
 |---|---|
 | Nettoyage et contrôle qualité de données hétérogènes | import (encodages, séparateurs, Excel, dates ambiguës), profil par colonne, valeurs de remplissage |
 | Statistiques robustes et explicables | valeurs atypiques par z-score robuste et IQR sur le logarithme, par groupe ([méthode](docs/specs/ENGINE_SPEC.md)) |
-| Rapprochement d'entités | noms similaires (5 stratégies, corroboration), clients multi-banques ([calibration](docs/specs/NAME_MATCHING.md)) |
+| Rapprochement d'entités | noms similaires (6 stratégies, corroboration), clients multi-banques ([calibration](docs/specs/NAME_MATCHING.md)) |
 | Rigueur d'évaluation | vérité terrain synthétique, rappel et précision mesurés, test sur données publiques |
 | Gouvernance des données | original immuable, corrections réversibles, journal d'audit chaîné, exports traçables |
 | Ingénierie logicielle | Python typé, pandas, FastAPI, React + TypeScript, tests, CI |
@@ -50,7 +50,7 @@ SIDADR **signale, l'humain décide** : aucun détecteur ne supprime, ne fusionne
 | Import | CSV, XLSX, XLS et ODS hétérogènes, détection d'encodage et de séparateur, correspondance des colonnes **confirmée par l'utilisateur**, contrôles de sécurité | `sidadr inspect` |
 | Profilage | complétude, validité, statistiques, score qualité explicable sur 4 dimensions | `sidadr profile` |
 | Doublons exacts | lignes identiques, identifiants en double, doublons inter-fichiers, combinaisons de champs | `sidadr duplicates` |
-| Noms similaires | 5 stratégies (RapidFuzz), corroboration par date de naissance et téléphone, 3 niveaux de similarité | `sidadr names` |
+| Noms similaires | 6 stratégies (RapidFuzz), corroboration par date de naissance et téléphone, 3 niveaux de similarité | `sidadr names` |
 | Multi-banques | clients présents dans plusieurs banques ou agences | `sidadr entities` |
 | Valeurs atypiques | z-score robuste et IQR sur le logarithme des montants, par type d'opération et devise | `sidadr anomalies` |
 | Règles métier | règles déclaratives en YAML, typées, validées au chargement | `sidadr rules` |

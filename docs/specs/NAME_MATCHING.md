@@ -12,7 +12,7 @@ flowchart LR
     A[Transactions] --> B[Fiches clients<br/>1 par fichier et identifiant client]
     B --> C[Normalisation<br/>accents, casse, tirets, espaces]
     C --> D[Blocage<br/>début / fin de mot, 3 lettres]
-    D --> E[Scores de nom<br/>5 stratégies, maximum retenu]
+    D --> E[Scores de nom<br/>6 stratégies, maximum retenu]
     E --> F[Corroboration<br/>naissance, téléphone]
     F --> G[Catégorie + plafonds]
 ```
