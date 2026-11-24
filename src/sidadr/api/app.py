@@ -13,6 +13,7 @@ import shutil
 import uuid
 import zipfile
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -33,12 +34,13 @@ from sidadr.analysis import (
     save_summary,
     summarize,
 )
+from sidadr.business_rules.model import calculation_rule
 from sidadr.config import ConfigError, default_schema, default_settings, schema_to_dict
 from sidadr.correction import EXCLUDED, CorrectionError, CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
 from sidadr.ingestion import ImportRejected, ImportSession, MappingError
-from sidadr.ingestion.generic import infer_generic_schema, suggest_mode
+from sidadr.ingestion.generic import GenericSchema, infer_generic_schema, suggest_mode
 from sidadr.ingestion.readers import RawTable
 from sidadr.reporting import build_traceability
 from sidadr.reporting.html_report import render_report
@@ -65,6 +67,18 @@ class SessionCreate(BaseModel):
     types: dict[str, Literal["text", "decimal", "date"]] = Field(
         default_factory=dict, max_length=200
     )
+    # Contrôles de calcul (mode générique), ex. total = quantité × prix unitaire.
+    checks: list[CheckIn] = Field(default_factory=list, max_length=20)
+
+
+class CheckIn(BaseModel):
+    """Contrôle de calcul : résultat = gauche opérateur droite, à la tolérance près."""
+
+    result: str = Field(max_length=200)
+    left: str = Field(max_length=200)
+    operator: Literal["*", "+", "-", "/"]
+    right: str = Field(max_length=200)
+    tolerance: Decimal = Field(default=Decimal(0), ge=0, le=Decimal("1e12"))
 
 
 class DecisionIn(BaseModel):
@@ -131,6 +145,24 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
     @app.exception_handler(ConfigError)
     async def _config(_: Request, exc: ConfigError) -> JSONResponse:
         return JSONResponse({"detail": str(exc), "code": "configuration"}, status_code=500)
+
+    def _checks(checks: list[CheckIn], generic: GenericSchema) -> list[dict[str, str]]:
+        """Résout les colonnes des contrôles de calcul et les valide sur le schéma déduit."""
+        resolved = []
+        for number, check in enumerate(checks, start=1):
+            spec = {
+                "result": generic.resolve(check.result),
+                "left": generic.resolve(check.left),
+                "operator": check.operator,
+                "right": generic.resolve(check.right),
+                "tolerance": str(check.tolerance),
+            }
+            try:
+                calculation_rule(number, spec, generic.schema)
+            except ConfigError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            resolved.append(spec)
+        return resolved
 
     def service(session_id: str, actor: str | None = None) -> CorrectionService:
         return CorrectionService(workspace.open_session(session_id), actor=actor or None)
@@ -290,6 +322,7 @@ def create_app(workspace_root: Path, allowed_origins: list[str] | None = None) -
                 )
             options = {
                 "key_fields": [generic.resolve(k) for k in payload.key_fields],
+                "checks": _checks(payload.checks, generic),
                 "group_by": [generic.resolve(g) for g in payload.group_by],
             }
             store = workspace.create_session(session, payload.name, "generic", options)

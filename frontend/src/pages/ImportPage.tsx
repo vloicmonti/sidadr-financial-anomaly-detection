@@ -5,6 +5,7 @@ import {
   FileSpreadsheet,
   FileText,
   LoaderCircle,
+  Plus,
   Trash2,
   Upload,
   X,
@@ -16,6 +17,8 @@ import { api } from "../api/client";
 import type {
   FileInspection,
   InferredField,
+  CalculationCheck,
+  CalculationOperator,
   OverridableType,
   SchemaField,
   SessionCreate,
@@ -333,9 +336,18 @@ interface GenericOptions {
   groupBy: Set<string>;
   /** Types choisis par l'utilisateur, seulement là où ils diffèrent du type détecté. */
   types: Record<string, OverridableType>;
+  /** Contrôles de calcul déclarés, sur des colonnes de type nombre. */
+  checks: CalculationCheck[];
 }
 
-const NO_OPTIONS: GenericOptions = { key: new Set(), required: new Set(), groupBy: new Set(), types: {} };
+const NO_OPTIONS: GenericOptions = { key: new Set(), required: new Set(), groupBy: new Set(), types: {}, checks: [] };
+
+const OPERATORS: { value: CalculationOperator; sign: string; label: string }[] = [
+  { value: "*", sign: "×", label: "multiplié par" },
+  { value: "+", sign: "+", label: "plus" },
+  { value: "-", sign: "−", label: "moins" },
+  { value: "/", sign: "÷", label: "divisé par" },
+];
 
 /** Change le type d'une colonne ; une colonne qui n'est plus du texte ne peut plus servir de groupe. */
 function withType(options: GenericOptions, field: InferredField, type: OverridableType): GenericOptions {
@@ -344,7 +356,12 @@ function withType(options: GenericOptions, field: InferredField, type: Overridab
   else types[field.name] = type;
   const groupBy = new Set(options.groupBy);
   if (type !== "text") groupBy.delete(field.name);
-  return { ...options, types, groupBy };
+  // Un contrôle de calcul ne porte que sur des nombres : il disparaît si une de ses colonnes n'en est plus.
+  const checks =
+    type === "decimal"
+      ? options.checks
+      : options.checks.filter((c) => ![c.result, c.left, c.right].includes(field.name));
+  return { ...options, types, groupBy, checks };
 }
 
 function toggle(set: Set<string>, value: string): Set<string> {
@@ -456,6 +473,107 @@ function GenericEditor({
           Sans clé, seules les lignes entièrement identiques seront recherchées comme doublons.
         </p>
       ) : null}
+      <CalculationChecks fields={fields} options={options} onChange={onChange} />
+    </div>
+  );
+}
+
+function CalculationChecks({
+  fields,
+  options,
+  onChange,
+}: {
+  fields: InferredField[];
+  options: GenericOptions;
+  onChange: (options: GenericOptions) => void;
+}) {
+  const numeric = fields.filter((f) => (options.types[f.name] ?? f.type) === "decimal");
+  const select = "h-8 rounded-md border border-line bg-surface px-1.5 text-[13px]";
+  const update = (index: number, patch: Partial<CalculationCheck>) =>
+    onChange({ ...options, checks: options.checks.map((c, i) => (i === index ? { ...c, ...patch } : c)) });
+  const columnSelect = (index: number, key: "result" | "left" | "right", label: string) => (
+    <select
+      aria-label={`Contrôle ${index + 1} : ${label}`}
+      value={options.checks[index]?.[key] ?? ""}
+      onChange={(event) => update(index, { [key]: event.target.value })}
+      className={cn(select, "max-w-44")}
+    >
+      {numeric.map((f) => (
+        <option key={f.name} value={f.name}>
+          {f.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div className="mt-5">
+      <h3 className="text-sm font-semibold">Contrôles de calcul</h3>
+      <p className="mt-1 mb-3 text-[13px] text-ink-2">
+        Facultatif. Vérifie qu'une colonne vaut le calcul de deux autres, par exemple « Total = Quantité × Prix
+        unitaire ». Une ligne où une valeur manque n'est pas jugée ; un écart au-delà de la tolérance devient un
+        constat à examiner.
+      </p>
+      {options.checks.length ? (
+        <ul className="grid gap-2" aria-label="Contrôles de calcul">
+          {options.checks.map((check, index) => (
+            <li key={index} className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-app px-3 py-2 text-[13px]">
+              {columnSelect(index, "result", "résultat")}
+              <span aria-hidden>=</span>
+              {columnSelect(index, "left", "première colonne")}
+              <select
+                aria-label={`Contrôle ${index + 1} : opération`}
+                value={check.operator}
+                onChange={(event) => update(index, { operator: event.target.value as CalculationOperator })}
+                className={select}
+              >
+                {OPERATORS.map((o) => (
+                  <option key={o.value} value={o.value} title={o.label}>
+                    {o.sign}
+                  </option>
+                ))}
+              </select>
+              {columnSelect(index, "right", "seconde colonne")}
+              <label className="flex items-center gap-1.5 text-ink-2">
+                tolérance ±
+                <input
+                  aria-label={`Contrôle ${index + 1} : tolérance`}
+                  value={check.tolerance}
+                  inputMode="decimal"
+                  onChange={(event) => update(index, { tolerance: event.target.value })}
+                  className="h-8 w-20 rounded-md border border-line bg-surface px-2 text-[13px]"
+                />
+              </label>
+              <button
+                type="button"
+                aria-label={`Retirer le contrôle ${index + 1}`}
+                onClick={() => onChange({ ...options, checks: options.checks.filter((_, i) => i !== index) })}
+                className="ml-auto grid size-7 cursor-pointer place-items-center rounded-md text-ink-3 hover:bg-subtle hover:text-ink"
+              >
+                <X aria-hidden className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {numeric.length >= 2 ? (
+        <Button
+          className="mt-2 h-8"
+          icon={Plus}
+          onClick={() => {
+            const [a, b, c] = [numeric[0], numeric[1], numeric[2] ?? numeric[0]];
+            if (!a || !b || !c) return;
+            onChange({
+              ...options,
+              checks: [...options.checks, { result: c.name, left: a.name, operator: "*", right: b.name, tolerance: "0,01" }],
+            });
+          }}
+        >
+          Ajouter un contrôle
+        </Button>
+      ) : (
+        <p className="text-xs text-ink-3">Il faut au moins deux colonnes de type nombre pour déclarer un calcul.</p>
+      )}
     </div>
   );
 }
@@ -591,6 +709,9 @@ export function ImportPage() {
             required_fields: [...options.required],
             group_by: [...options.groupBy],
             ...(Object.keys(options.types).length ? { types: options.types } : {}),
+            ...(options.checks.length
+              ? { checks: options.checks.map((c) => ({ ...c, tolerance: c.tolerance.trim().replace(",", ".") || "0" })) }
+              : {}),
           }
         : { ...base, mappings: overrides },
     );

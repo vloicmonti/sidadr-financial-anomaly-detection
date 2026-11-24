@@ -5,11 +5,12 @@ from __future__ import annotations
 import operator
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
 
-from sidadr.business_rules.model import COMPARISONS, SET_OPS, Rule, RuleSet
+from sidadr.business_rules.model import COMPARISONS, SET_OPS, Rule, RuleSet, french_number
 from sidadr.config import Schema, default_schema
 from sidadr.findings import Finding
 from sidadr.ingestion.values import is_missing
@@ -39,6 +40,8 @@ class Violation:
         text = f"{self.rule.description} : {self.field} = {shown}, attendu {self.rule.expected()}"
         if self.rule.other_field:
             text += f" (= {self.compared_to})"
+        if self.rule.op == "formula" and self.compared_to is not None:
+            text += f", calculé : {french_number(self.compared_to)}"
         return text + "."
 
     def to_finding(self) -> Finding:
@@ -89,6 +92,25 @@ class RuleReport:
         return [v.to_finding() for v in self.violations]
 
 
+def _compute(left: Any, sign: str, right: Any) -> Decimal | None:
+    """Calcul exact (Decimal) ; None si un opérande manque ou si l'on divise par zéro."""
+    if not isinstance(left, Decimal) or not isinstance(right, Decimal):
+        return None
+    if sign == "*":
+        return left * right
+    if sign == "+":
+        return left + right
+    if sign == "-":
+        return left - right
+    return None if right == 0 else left / right
+
+
+def _plain(number: Decimal) -> str:
+    """Écriture lisible d'un résultat de calcul : pas de notation scientifique, 6 décimales au plus."""
+    rounded = number.quantize(Decimal("0.000001")).normalize()
+    return format(rounded, "f")
+
+
 def _matches_when(rule: Rule, typed: pd.DataFrame) -> pd.Series:
     mask = pd.Series(True, index=typed.index)
     for name, accepted in rule.when:
@@ -114,6 +136,11 @@ def evaluate_rules(
             values = typed[name].tolist()
             others = typed[rule.other_field].tolist() if rule.other_field else None
             others_raw = frame[rule.other_field].tolist() if rule.other_field else None
+            operands = (
+                (typed[rule.formula[0]].tolist(), typed[rule.formula[2]].tolist())
+                if rule.formula
+                else None
+            )
             for i in rows:
                 raw_value = raw[i]
                 observed = (
@@ -132,6 +159,14 @@ def evaluate_rules(
                 elif value is None:
                     not_evaluable += 1
                     continue
+                elif rule.op == "formula":
+                    assert rule.formula is not None and operands is not None
+                    computed = _compute(operands[0][i], rule.formula[1], operands[1][i])
+                    if computed is None:
+                        not_evaluable += 1
+                        continue
+                    compared = _plain(computed)
+                    broken = abs(value - computed) > rule.tolerance
                 elif rule.op in SET_OPS:
                     inside = str(value) in rule.allowed
                     broken = not inside if rule.op == "in" else inside

@@ -147,6 +147,18 @@ export interface SessionCreate {
   group_by?: string[];
   /** Types imposés en mode générique, par nom de champ. */
   types?: Record<string, OverridableType>;
+  /** Contrôles de calcul (mode générique) : result = left operator right, à la tolérance près. */
+  checks?: CalculationCheck[];
+}
+
+export type CalculationOperator = "*" | "+" | "-" | "/";
+
+export interface CalculationCheck {
+  result: string;
+  left: string;
+  operator: CalculationOperator;
+  right: string;
+  tolerance: string;
 }
 
 /** Types qu'on peut imposer à une colonne à l'import (une liste de valeurs exigerait ses valeurs). */

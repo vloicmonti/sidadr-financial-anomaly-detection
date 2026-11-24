@@ -159,6 +159,55 @@ describe("écran d'import", () => {
     expect(body.types).toEqual({ montant_ht: "text", n_facture: "decimal" });
   });
 
+  it("déclare un contrôle de calcul entre colonnes de type nombre", async () => {
+    const withNumbers: UploadResult = {
+      ...GENERIC,
+      generic_fields: [
+        ...GENERIC.generic_fields,
+        { name: "tva", label: "TVA", type: "decimal", filled: 402, conformity: 1, sources: ["factures.csv"], reason: "nombre" },
+        { name: "montant_ttc", label: "Montant TTC", type: "decimal", filled: 402, conformity: 1, sources: ["factures.csv"], reason: "nombre" },
+      ],
+    };
+    const calls = mockApi(withNumbers);
+    renderImport();
+    await userEvent.upload(screen.getByLabelText(/Glissez vos fichiers/i), csv("factures.csv"));
+    await userEvent.click(screen.getByRole("button", { name: "Analyser le fichier" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ajouter un contrôle" }));
+
+    const result = screen.getByRole("combobox", { name: "Contrôle 1 : résultat" });
+    expect([...result.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["Montant HT", "TVA", "Montant TTC"]);
+    await userEvent.selectOptions(result, "montant_ttc");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Contrôle 1 : première colonne" }), "montant_ht");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Contrôle 1 : opération" }), "+");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Contrôle 1 : seconde colonne" }), "tva");
+    const tolerance = screen.getByRole("textbox", { name: "Contrôle 1 : tolérance" });
+    await userEvent.clear(tolerance);
+    await userEvent.type(tolerance, "0,05");
+
+    await userEvent.click(screen.getByRole("button", { name: /Créer la session/ }));
+    await waitFor(() => expect(calls.some((c) => c.url === "/api/sessions" && c.init?.method === "POST")).toBe(true));
+    const body = JSON.parse(String(calls.find((c) => c.url === "/api/sessions" && c.init?.method === "POST")?.init?.body));
+    expect(body.checks).toEqual([{ result: "montant_ttc", left: "montant_ht", operator: "+", right: "tva", tolerance: "0.05" }]);
+  });
+
+  it("retire un contrôle de calcul si une de ses colonnes n'est plus un nombre", async () => {
+    mockApi({
+      ...GENERIC,
+      generic_fields: [
+        ...GENERIC.generic_fields,
+        { name: "tva", label: "TVA", type: "decimal", filled: 402, conformity: 1, sources: ["factures.csv"], reason: "nombre" },
+      ],
+    });
+    renderImport();
+    await userEvent.upload(screen.getByLabelText(/Glissez vos fichiers/i), csv("factures.csv"));
+    await userEvent.click(screen.getByRole("button", { name: "Analyser le fichier" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ajouter un contrôle" }));
+    expect(screen.getByRole("list", { name: "Contrôles de calcul" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "TVA : type" }), "text");
+    expect(screen.queryByRole("list", { name: "Contrôles de calcul" })).not.toBeInTheDocument();
+    expect(screen.getByText(/au moins deux colonnes de type nombre/)).toBeInTheDocument();
+  });
+
   it("accepte les classeurs .xls et .ods", async () => {
     mockApi(GENERIC);
     renderImport();

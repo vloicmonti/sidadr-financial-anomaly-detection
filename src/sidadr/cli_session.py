@@ -27,7 +27,8 @@ from sidadr.analysis import (
     save_summary,
     summarize,
 )
-from sidadr.config import FieldType
+from sidadr.business_rules.model import calculation_rule
+from sidadr.config import ConfigError, FieldType
 from sidadr.correction import CorrectionService, Decision
 from sidadr.export import export_session
 from sidadr.findings import Severity
@@ -68,6 +69,44 @@ def _print_created(store: SessionStore) -> None:
     print(f"\nÉtape suivante : sidadr analyze {store.session_id}")
 
 
+CHECK_SIGNS = ("*", "/", "+", " - ")  # la soustraction exige des espaces : « Prix-HT » reste un nom
+
+
+def parse_check(text: str) -> dict[str, str]:
+    """« Total = Quantité * Prix ~ 0.01 » -> {result, left, operator, right, tolerance}."""
+    result, sep, expression = text.partition("=")
+    if not sep or not result.strip():
+        raise MappingError(
+            f"--check attend « RÉSULTAT = GAUCHE * DROITE [~ TOLÉRANCE] », reçu {text!r}."
+        )
+    expression, _, tolerance = expression.partition("~")
+    for sign in CHECK_SIGNS:
+        left, found, right = expression.partition(sign)
+        if found and left.strip() and right.strip():
+            return {
+                "result": result.strip(),
+                "left": left.strip(),
+                "operator": sign.strip(),
+                "right": right.strip(),
+                "tolerance": tolerance.strip() or "0",
+            }
+    raise MappingError(
+        f"--check : opérateur introuvable dans {expression.strip()!r} (*, /, + ou « - » entre espaces)."
+    )
+
+
+def _resolve_check(number: int, text: str, generic: GenericSchema) -> dict[str, str]:
+    """Résout les colonnes d'un contrôle et le valide sur le schéma déduit."""
+    spec = parse_check(text)
+    for key in ("result", "left", "right"):
+        spec[key] = generic.resolve(spec[key])
+    try:
+        calculation_rule(number, spec, generic.schema)
+    except ConfigError as exc:
+        raise MappingError(str(exc)) from exc
+    return spec
+
+
 def _parse_types(values: list[str]) -> dict[str, FieldType]:
     """« Montant=decimal » -> {"Montant": "decimal"} ; le type est vérifié par le schéma générique."""
     types: dict[str, FieldType] = {}
@@ -88,9 +127,9 @@ def cmd_session_create(
     mode = suggest_mode(missing) if args.mode == "auto" else args.mode
 
     if mode == "banking":
-        if args.key or args.group_by or args.type:
+        if args.key or args.group_by or args.type or args.check:
             print(
-                "Note : --key, --group-by et --type ne s'appliquent qu'au mode générique ; le mode bancaire utilise sa configuration."
+                "Note : --key, --group-by, --type et --check ne s'appliquent qu'au mode générique ; le mode bancaire utilise sa configuration."
             )
         session = load_session(args)
         if session is None:
@@ -113,13 +152,16 @@ def cmd_session_create(
         print_generic_schema(generic)
         print("\nLe schéma déduit doit être confirmé : relancez avec --accept-proposed.")
         print(
-            "Options : --key COLONNE (clé d'unicité), --required COLONNE, --group-by COLONNE, --type COLONNE=TYPE, --rules FICHIER.yaml"
+            "Options : --key COLONNE (clé d'unicité), --required COLONNE, --group-by COLONNE, --type COLONNE=TYPE, --check 'TOTAL = A * B', --rules FICHIER.yaml"
         )
         return EXIT_NEEDS_CONFIRMATION
     session = ImportSession(schema=generic.schema)
     for inspection in inspections:
         session.add(inspection, generic.mappings[inspection.source_file].confirm(generic.schema))
-    options: dict[str, Any] = {"key_fields": key_fields, "group_by": group_by}
+    checks = [
+        _resolve_check(number, raw, generic) for number, raw in enumerate(args.check, start=1)
+    ]
+    options: dict[str, Any] = {"key_fields": key_fields, "group_by": group_by, "checks": checks}
     if args.rules:
         options["rules_path"] = str(Path(args.rules).resolve())
     store = _workspace(args).create_session(session, args.name, "generic", options)
@@ -395,6 +437,14 @@ def register(
         default=[],
         metavar="COLONNE=TYPE",
         help="(générique) impose le type d'une colonne : text, decimal ou date ; répétable",
+    )
+    p.add_argument(
+        "--check",
+        action="append",
+        default=[],
+        metavar="'TOTAL = A * B ~ TOL'",
+        help="(générique) contrôle de calcul entre colonnes (*, /, + ou « - » entre espaces), "
+        "tolérance facultative après ~ ; répétable",
     )
     p.add_argument(
         "--rules", type=Path, help="(générique) règles YAML écrites sur les noms de colonnes"

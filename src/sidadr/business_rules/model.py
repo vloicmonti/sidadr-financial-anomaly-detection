@@ -23,7 +23,9 @@ from sidadr.findings import Severity
 COMPARISONS = ("<", "<=", ">", ">=", "==", "!=")
 SET_OPS = ("in", "not_in")
 # valid_type : la valeur renseignée doit se lire dans le type du champ (nombre, date, liste).
-OPERATORS = (*COMPARISONS, *SET_OPS, "not_null", "regex", "valid_type")
+# formula : le champ doit valoir « gauche opérateur droite », à la tolérance près.
+OPERATORS = (*COMPARISONS, *SET_OPS, "not_null", "regex", "valid_type", "formula")
+ARITHMETIC = {"*": "×", "+": "+", "-": "−", "/": "÷"}
 TYPE_EXPECTATIONS = {
     "decimal": "un nombre",
     "date": "une date valide",
@@ -50,13 +52,23 @@ class Rule:
     pattern: re.Pattern[str] | None = None
     when: tuple[tuple[str, frozenset[str]], ...] = ()
     expected_type: str | None = None  # valid_type : ce que le type attend, en clair
+    formula: tuple[str, str, str] | None = None  # formula : (gauche, opérateur, droite)
+    tolerance: Decimal = Decimal(0)  # formula : écart admis (arrondis)
+    shown_expected: str | None = None  # attente rédigée avec les libellés des colonnes
 
     def expected(self) -> str:
         """Ce que la règle attend, en clair."""
+        if self.shown_expected:
+            return self.shown_expected
         if self.op == "not_null":
             return "une valeur renseignée"
         if self.op == "valid_type":
             return self.expected_type or "une valeur du type du champ"
+        if self.op == "formula":
+            assert self.formula is not None
+            left, sign, right = self.formula
+            text = f"= {left} {ARITHMETIC[sign]} {right}"
+            return text + (f" (± {_show(self.tolerance)})" if self.tolerance else "")
         if self.op in SET_OPS:
             if self.reference_name:
                 place = (
@@ -105,6 +117,59 @@ def _coerce(raw: Any, field_type: str, where: str) -> RuleValue:
         except ValueError as exc:
             raise ConfigError(f"{where} : {raw!r} n'est pas une date AAAA-MM-JJ.") from exc
     return str(raw).strip()
+
+
+def _formula(
+    check: dict[str, Any], fields: tuple[str, ...], schema: Schema, where: str
+) -> tuple[tuple[str, str, str], Decimal]:
+    """Valide une règle de calcul : champs numériques, opérateur connu, tolérance positive."""
+    left, sign, right = (str(check.get(k, "")) for k in ("left", "operator", "right"))
+    if sign not in ARITHMETIC:
+        raise ConfigError(f"{where} : opérateur de calcul {sign!r} inconnu (attendus : * + - /).")
+    for name in (*fields, left, right):
+        if name not in schema.names:
+            raise ConfigError(f"{where} : champ inconnu dans le calcul : {name!r}.")
+        if schema[name].type != "decimal":
+            raise ConfigError(f"{where} : {name} n'est pas un champ numérique.")
+    tolerance = _coerce(check.get("tolerance", 0), "decimal", where)
+    assert isinstance(tolerance, Decimal)
+    if tolerance < 0:
+        raise ConfigError(f"{where} : la tolérance ne peut pas être négative.")
+    return (left, sign, right), tolerance
+
+
+def calculation_rule(number: int, check: dict[str, Any], schema: Schema) -> Rule:
+    """Contrôle de calcul déclaré à l'import (mode générique) : résultat = gauche op droite.
+
+    `check` : {"result", "left", "operator", "right", "tolerance"} sur des noms de champs.
+    Lève ConfigError si un champ est inconnu ou non numérique.
+    """
+    result = str(check.get("result", ""))
+    where = f"Contrôle de calcul n° {number}"
+    formula, tolerance = _formula(check, (result,), schema, where)
+    label = {f.name: f.label for f in schema.fields}
+    left, sign, right = formula
+    shown = f"= {label[left]} {ARITHMETIC[sign]} {label[right]}"
+    if tolerance:
+        shown += f" (± {french_number(tolerance)})"
+    return Rule(
+        rule_id=f"R-CALC-{number}",
+        description=f"{label[result]} doit valoir {label[left]} {ARITHMETIC[sign]} {label[right]}",
+        fields=(result,),
+        op="formula",
+        severity=Severity.PROBABLE_INCONSISTENCY,
+        recommendation="Vérifier les trois valeurs à la source : l'erreur peut porter sur "
+        "n'importe laquelle d'entre elles.",
+        dimension="consistency",
+        formula=formula,
+        tolerance=tolerance,
+        shown_expected=shown,
+    )
+
+
+def french_number(value: Decimal | str) -> str:
+    """« 0.01 » -> « 0,01 » : nombres affichés à la française dans les explications."""
+    return str(value).replace(".", ",")
 
 
 def _load_reference(spec: Any, base: Path, name: str) -> frozenset[str]:
@@ -186,6 +251,8 @@ def load_rules(
         allowed: frozenset[str] = frozenset()
         reference_name = None
         pattern = None
+        formula: tuple[str, str, str] | None = None
+        tolerance = Decimal(0)
 
         if op in COMPARISONS:
             if "other_field" in check:
@@ -218,6 +285,8 @@ def load_rules(
                 allowed = frozenset(str(v).strip() for v in check["values"])
             else:
                 raise ConfigError(f"{where} : 'values' ou 'reference' obligatoire pour {op}.")
+        elif op == "formula":
+            formula, tolerance = _formula(check, fields, schema, where)
         elif op == "valid_type":
             if field_type not in TYPE_EXPECTATIONS:
                 raise ConfigError(
@@ -258,6 +327,8 @@ def load_rules(
                 pattern=pattern,
                 when=tuple(when),
                 expected_type=TYPE_EXPECTATIONS.get(field_type) if op == "valid_type" else None,
+                formula=formula,
+                tolerance=tolerance,
             )
         )
 

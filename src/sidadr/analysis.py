@@ -19,7 +19,7 @@ import pandas as pd
 
 from sidadr.anomaly_detection import AnomalyReport, detect_anomalies
 from sidadr.business_rules import Rule, RuleReport, RuleSet, evaluate_rules, load_rules
-from sidadr.business_rules.model import TYPE_EXPECTATIONS
+from sidadr.business_rules.model import TYPE_EXPECTATIONS, calculation_rule
 from sidadr.config import (
     AnomalySettings,
     DuplicateSettings,
@@ -72,7 +72,11 @@ class AnalysisResult:
         ]
 
 
-def _generic_rules(schema: Schema, markers: frozenset[str] = frozenset()) -> RuleSet:
+def _generic_rules(
+    schema: Schema,
+    markers: frozenset[str] = frozenset(),
+    checks: list[dict[str, Any]] | None = None,
+) -> RuleSet:
     """Règles par défaut du mode générique.
 
     Champs désignés obligatoires renseignés (une valeur de remplissage comme « UNKNOWN »
@@ -108,9 +112,18 @@ def _generic_rules(schema: Schema, markers: frozenset[str] = frozenset()) -> Rul
                     expected_type=TYPE_EXPECTATIONS[ftype],
                 )
             )
+    rules.extend(calculation_rule(n, c, schema) for n, c in enumerate(checks or [], start=1))
     return RuleSet(
         tuple(rules), {}, Path("(règles par défaut du mode générique)"), missing_markers=markers
     )
+
+
+def _with_checks(
+    ruleset: RuleSet, schema: Schema, markers: frozenset[str], checks: list[dict[str, Any]]
+) -> RuleSet:
+    """Règles de l'utilisateur, complétées des contrôles de calcul déclarés à l'import."""
+    extra = tuple(calculation_rule(n, c, schema) for n, c in enumerate(checks, start=1))
+    return dataclasses.replace(ruleset, rules=ruleset.rules + extra, missing_markers=markers)
 
 
 def _without_placeholders(
@@ -154,21 +167,23 @@ def analyze(
         anomalies = detect_anomalies(
             view, dataclasses.replace(AnomalySettings(), fields=numeric, group_by=group_by), schema
         )
+        checks = list(options.get("checks", []))
         user_rules = rules_path or (
             Path(options["rules_path"]) if options.get("rules_path") else None
         )
         ruleset = (
-            dataclasses.replace(
-                load_rules(user_rules, schema, rule_overrides), missing_markers=markers
-            )
+            _with_checks(load_rules(user_rules, schema, rule_overrides), schema, markers, checks)
             if user_rules
-            else _generic_rules(schema, markers)
+            else _generic_rules(schema, markers, checks)
         )
         rules = evaluate_rules(frame, ruleset, schema)
         score = compute_score(
             profile,
             duplicate_rows=duplicates.rows_involved(KEY_LEVELS),
-            rule_violation_rows=rules.rows_violating("consistency") if user_rules else None,
+            # Cohérence évaluée seulement si l'utilisateur a déclaré des règles ou des calculs.
+            rule_violation_rows=rules.rows_violating("consistency")
+            if user_rules or checks
+            else None,
         )
         return AnalysisResult(profile, score, duplicates, None, None, anomalies, rules, mode)
 

@@ -360,3 +360,29 @@ def test_types_can_be_chosen_when_creating_a_generic_session(client: TestClient)
     profile = client.post(f"/api/sessions/{sid}/analyze").json()["profile"]
     quantity = next(c for c in profile["columns"] if c["name"] == "quantite")
     assert (quantity["rows"], quantity["invalid"]) == (3, 1)
+
+
+def test_calculation_checks_through_the_api(client: TestClient) -> None:
+    csv = "Ref;Quantité;Prix unitaire;Total\nT1;2;2,00;4,00\nT2;3;1,50;9,00\nT3;;1,00;2,00\n"
+    upload = client.post("/api/imports", files=[("files", ("v.csv", csv.encode()))]).json()
+    check = {"result": "Total", "left": "Quantité", "operator": "*", "right": "Prix unitaire"}
+
+    refused = client.post(
+        "/api/sessions",
+        json={"upload_id": upload["upload_id"], "checks": [{**check, "left": "Ref"}]},
+    )
+    assert refused.status_code == 422 and "pas un champ numérique" in refused.json()["detail"]
+
+    created = client.post(
+        "/api/sessions",
+        json={"upload_id": upload["upload_id"], "checks": [{**check, "tolerance": "0.01"}]},
+    )
+    assert created.status_code == 201, created.text
+    sid = created.json()["session_id"]
+    summary = client.post(f"/api/sessions/{sid}/analyze").json()
+    calc = next(r for r in summary["rules"] if r["rule_id"] == "R-CALC-1")
+    assert (calc["violations"], calc["not_evaluable"]) == (1, 1)
+    consistency = next(d for d in summary["score"]["dimensions"] if d["name"] == "consistency")
+    assert consistency["value"] is not None
+    finding = client.get(f"/api/sessions/{sid}/findings", params={"q": "calculé"}).json()["items"]
+    assert len(finding) == 1 and finding[0]["severity"] == "probable_inconsistency"

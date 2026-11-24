@@ -122,7 +122,7 @@ npm run dev
 
 Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
 
-- **Sessions** et **import** : glisser-déposer (CSV, XLSX, XLS, ODS), aperçu, mode suggéré, configuration du mode générique (clé, champs obligatoires, regroupement, type de chaque colonne) ou correspondance bancaire.
+- **Sessions** et **import** : glisser-déposer (CSV, XLSX, XLS, ODS), aperçu, mode suggéré, configuration du mode générique (clé, champs obligatoires, regroupement, type de chaque colonne, contrôles de calcul entre colonnes) ou correspondance bancaire.
 - **Vue d'ensemble** : analyse, score de qualité, constats par sévérité, état de la revue.
 - **Constats** (vues Doublons, Noms & identités, Anomalies, Règles métier) : filtres, détail avec les colonnes divergentes surlignées, décision motivée.
 - **Corrections** : recherche d'enregistrements, valeur d'origine et valeur de travail champ par champ, correction validée par le moteur, exclusion, annulation.
