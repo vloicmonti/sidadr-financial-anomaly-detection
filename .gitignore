@@ -22,6 +22,11 @@ workspace/
 *.sqlite
 *.db
 
+# Sorties de commandes écrites à la racine (ex. sidadr duplicates --csv doublons.csv)
+/*.csv
+/*.xlsx
+/*.html
+
 # Données : seules les données synthétiques versionnées sont autorisées
 data/*
 !data/synthetic/
