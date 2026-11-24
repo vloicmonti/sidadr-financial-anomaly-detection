@@ -41,8 +41,12 @@ function Meter({ value, tone = "bg-brand-600" }: { value: number; tone?: string 
 function Dimensions({ analysis }: { analysis: AnalysisSummary }) {
   const { score } = analysis;
   // La note d'une dimension n'est utile que si elle ne répète ni sa définition ni les notes générales.
-  const adds = (note: string, definition: string) =>
-    Boolean(note) && !definition.includes(note.slice(-30)) && !score.notes.some((n) => n.includes(note));
+  const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\d]+/gu) ?? []);
+  const adds = (note: string, definition: string) => {
+    if (!note || definition.includes(note.slice(-30)) || score.notes.some((n) => n.includes(note))) return false;
+    const known = words(definition);
+    return [...words(note)].some((w) => !known.has(w)); // au moins un mot nouveau
+  };
   return (
     <Card>
       <CardHeader

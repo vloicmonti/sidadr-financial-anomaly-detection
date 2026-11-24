@@ -4,7 +4,36 @@
 
 > **Système Intelligent de Détection des Anomalies et Duplications** dans des données financières multi-sources : import, profilage, doublons, noms similaires, clients multi-banques, valeurs atypiques, règles métier, corrections tracées et rapport qualité.
 
-**Statut : v0.1 — moteur et interface web complets.** Prototype local mono-utilisateur, testé sur des données **synthétiques**. Le moteur s'utilise en ligne de commande ou via l'interface React.
+**Statut : v0.1 — moteur et interface web complets.** Prototype local mono-utilisateur, testé sur des données **synthétiques** et sur un fichier public réel. Le moteur s'utilise en ligne de commande ou via l'interface React.
+
+![Vue d'ensemble d'une session : score qualité, constats par sévérité, état de la revue](docs/images/vue-ensemble.png)
+
+### En bref
+
+- **Tout fichier tabulaire** (CSV, XLSX, XLS, ODS) : schéma déduit automatiquement, ou schéma bancaire spécialisé.
+- **Détection** de doublons, noms de clients proches, clients multi-banques, valeurs atypiques, champs vides ou remplis de « ERROR » / « UNKNOWN », formats illisibles, calculs incohérents (`Total ≠ Quantité × Prix`).
+- **L'humain décide** : chaque constat est expliqué, chaque correction ou décision est motivée, réversible et inscrite dans un journal d'audit chaîné, qui détecte toute modification après coup.
+- **Mesuré, pas affirmé** : 760 défauts injectés avec leur liste, 100 % des valeurs manquantes, dates impossibles et violations de règles retrouvés sans faux positif ; sur un fichier Kaggle jamais vu, les 10 082 défauts retrouvés exactement.
+- **Qualité logicielle** : 316 tests Python et 32 tests d'interface, `mypy --strict`, intégration continue.
+
+### Ce que ce projet démontre
+
+| Compétence | Où la voir |
+|---|---|
+| Nettoyage et contrôle qualité de données hétérogènes | import (encodages, séparateurs, Excel, dates ambiguës), profil par colonne, valeurs de remplissage |
+| Statistiques robustes et explicables | valeurs atypiques par z-score robuste et IQR sur le logarithme, par groupe ([méthode](docs/specs/ENGINE_SPEC.md)) |
+| Rapprochement d'entités | noms similaires (5 stratégies, corroboration), clients multi-banques ([calibration](docs/specs/NAME_MATCHING.md)) |
+| Rigueur d'évaluation | vérité terrain synthétique, rappel et précision mesurés, test sur données publiques |
+| Gouvernance des données | original immuable, corrections réversibles, journal d'audit chaîné, exports traçables |
+| Ingénierie logicielle | Python typé, pandas, FastAPI, React + TypeScript, tests, CI |
+
+| Constats : noms similaires et décision motivée | Qualité des données : score et profil par colonne |
+|---|---|
+| ![Écran des constats : noms similaires, détail et décision](docs/images/constats-noms.png) | ![Écran Qualité : dimensions du score et profil des colonnes](docs/images/qualite.png) |
+
+| Corrections : original intact, copie de travail corrigée |
+|---|
+| ![Écran Corrections : valeur d'origine et valeur de travail champ par champ](docs/images/corrections.png) |
 
 ---
 
@@ -63,6 +92,8 @@ Le générateur de données injecte des défauts **connus** et écrit leur liste
 | Clients multi-banques | 100 % retrouvés (par défaut) ; 100 % de groupes purs en mode strict |
 | Montants atypiques | 96 à 99 % retrouvés sur trois graines |
 
+Sur un fichier public jamais vu, [*Cafe Sales — Dirty Data for Cleaning Training*](https://www.kaggle.com/datasets/ahmedmohamed2003/cafe-sales-dirty-data-for-cleaning-training) (Kaggle, CC BY-SA 4.0, 10 000 ventes) : schéma déduit juste sans réglage, les 10 082 cellules vides ou remplies de `ERROR` / `UNKNOWN` retrouvées exactement colonne par colonne, et le contrôle `Total = Quantité × Prix` respecté sur les 8 544 lignes complètes, sans fausse alerte. Ce test a d'abord révélé deux manques du moteur, corrigés depuis.
+
 Ces chiffres valent pour des **données synthétiques** générées par le projet lui-même : ils démontrent que la méthode fonctionne et qu'elle est mesurable, **pas** qu'elle obtiendrait les mêmes résultats sur des données réelles. Les limites sont détaillées dans [la spécification](docs/specs/ENGINE_SPEC.md) et [la note sur les noms](docs/specs/NAME_MATCHING.md).
 
 ## Démarrage rapide (Windows PowerShell)
@@ -92,15 +123,24 @@ Sous macOS ou Linux, remplacer `.venv\Scripts\` par `.venv/bin/`.
 
 ```powershell
 .venv\Scripts\sidadr session-create data\synthetic\alpha_T2.csv data\synthetic\beta_T2.xlsx data\synthetic\gamma_T2.csv --accept-proposed --name "Contrôle T2"
-.venv\Scripts\sidadr analyze <SESSION>
-.venv\Scripts\sidadr findings <SESSION> --severity certain_error
-.venv\Scripts\sidadr correct <SESSION> alpha_t2:1035 branch_code BALP-018 --reason "Code agence retrouvé dans le système source"
-.venv\Scripts\sidadr decide <SESSION> NAME-00002 rejected --reason "Homonymes : dates de naissance différentes"
-.venv\Scripts\sidadr analyze <SESSION>
-.venv\Scripts\sidadr history <SESSION> --verify
-.venv\Scripts\sidadr export <SESSION> --format xlsx
-.venv\Scripts\sidadr report <SESSION>
 ```
+
+La commande affiche l'identifiant de la session (`S-…`). Le garder dans une variable évite de le recopier :
+
+```powershell
+$S = "S-20261124-065601-401b90"   # remplacer par l'identifiant affiché
+.venv\Scripts\sidadr analyze $S
+.venv\Scripts\sidadr findings $S --severity certain_error --limit 10
+.venv\Scripts\sidadr correct $S alpha_t2:1035 branch_code BALP-018 --reason "Code agence retrouvé dans le système source"
+.venv\Scripts\sidadr decide $S NAME-00001 confirmed --reason "Même nom, même date de naissance et même téléphone"
+.venv\Scripts\sidadr decide $S NAME-00002 deferred --reason "Aucune date de naissance ni téléphone pour trancher"
+.venv\Scripts\sidadr analyze $S
+.venv\Scripts\sidadr history $S --verify
+.venv\Scripts\sidadr export $S --format xlsx
+.venv\Scripts\sidadr report $S
+```
+
+`sidadr sessions` liste les sessions existantes ; `sidadr <commande> --help` détaille chaque commande.
 
 Les sessions sont enregistrées dans `workspace/` (ignoré par Git), les exports dans `exports/`.
 
@@ -120,7 +160,7 @@ npm ci
 npm run dev
 ```
 
-Puis ouvrir `http://127.0.0.1:5173`. Écrans disponibles :
+Puis ouvrir `http://127.0.0.1:5173` (« Moteur local connecté » doit apparaître en vert en bas de la barre latérale). Écrans disponibles :
 
 - **Sessions** et **import** : glisser-déposer (CSV, XLSX, XLS, ODS), aperçu, mode suggéré, configuration du mode générique (clé, champs obligatoires, regroupement, type de chaque colonne, contrôles de calcul entre colonnes) ou correspondance bancaire.
 - **Vue d'ensemble** : analyse, score de qualité, constats par sévérité, état de la revue.
@@ -153,11 +193,11 @@ src/sidadr/
 config/        schéma, seuils, poids du score et règles (YAML)
 data/synthetic jeu de démonstration et vérité terrain
 docs/          architecture, spécifications, dictionnaire de données, design system
-tests/         257 tests unitaires et d'intégration
+tests/         316 tests unitaires et d'intégration (et 32 tests d'interface dans frontend/)
 ```
 
 **Choix principaux**
-- **Moteur indépendant de l'interface** : toute la logique est dans un paquet Python testé ; une interface ne fera que l'appeler.
+- **Moteur indépendant de l'interface** : toute la logique est dans un paquet Python testé ; l'API et l'interface web ne font que l'appeler.
 - **Données originales immuables** : instantané en lecture seule, protégé par empreinte SHA-256 ; les corrections sont une couche réversible.
 - **Configuration plutôt que code** : seuils, règles et poids du score sont en YAML, validés au chargement.
 - **Méthodes explicables d'abord** : Isolation Forest et LOF ont été étudiés puis écartés, faute de pouvoir les valider sur ces données ([raisons](docs/specs/ENGINE_SPEC.md)).
